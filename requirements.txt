@@ -1,0 +1,34 @@
+# Emby 缺集检测系统 - 依赖管理
+# 参考 MoviePilot 技术栈
+
+# Web 框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# HTTP 客户端
+httpx==0.26.0
+requests==2.31.0
+
+# 数据库
+aiosqlite==0.19.0
+
+# 数据处理
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# 定时任务
+apscheduler==3.10.4
+
+# 导出功能
+openpyxl==3.1.2
+
+# 日志
+loguru==0.7.2
+
+# 工具
+python-dotenv==1.0.0
+
+# 认证
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4

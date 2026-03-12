@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "multi-bot-deploy": {
+      "version": "1.0.0",
+      "installedAt": 1773302078146
+    },
+    "webpage-reader-skill": {
+      "version": "0.0.1",
+      "installedAt": 1773302080454
+    },
+    "docs-pdf": {
+      "version": "1.0.2",
+      "installedAt": 1773302083604
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "project": "Emby 缺集检测系统 UI 优化",
+  "created": "2026-03-12",
+  "features": [
+    {
+      "id": "F001",
+      "category": "bugfix",
+      "description": "修复海报展示为空白的问题",
+      "steps": [
+        "检查 Emby API 返回的海报字段",
+        "修复 poster URL 获取逻辑",
+        "确保有默认占位图"
+      ],
+      "passes": true,
+      "priority": 1,
+      "completedSession": 1
+    },
+    {
+      "id": "F002",
+      "category": "bugfix",
+      "description": "修复下载后按钮仍可点击的问题",
+      "steps": [
+        "在下载后禁用按钮",
+        "添加已下载状态显示",
+        "防止重复推送"
+      ],
+      "passes": true,
+      "priority": 1,
+      "completedSession": 1
+    },
+    {
+      "id": "F003",
+      "category": "ui",
+      "description": "美化列表整体 UI",
+      "steps": [
+        "优化表格样式",
+        "添加阴影和圆角",
+        "改进颜色搭配",
+        "优化间距和排版"
+      ],
+      "passes": true,
+      "priority": 1,
+      "completedSession": 1
+    },
+    {
+      "id": "F004",
+      "category": "feature",
+      "description": "创建定时进度汇报任务",
+      "steps": [
+        "创建定时任务脚本",
+        "每10分钟检查项目进度",
+        "通过 QQ 发送进度报告"
+      ],
+      "passes": true,
+      "priority": 1,
+      "completedSession": 2
+    }
+  ]
+}

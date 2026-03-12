@@ -142,15 +142,19 @@
         }
         table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             font-size: 13px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
         }
         thead {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
         th, td {
-            padding: 10px 12px;
+            padding: 12px 14px;
             text-align: left;
             border-bottom: 1px solid #eee;
             white-space: nowrap;
@@ -166,7 +170,20 @@
         th { font-weight: 600; cursor: pointer; user-select: none; }
         th:hover { opacity: 0.9; }
         th.sorted { background: rgba(255,255,255,0.2); }
-        tr:hover { background: #f8f9fa; }
+        tbody tr {
+            background: white;
+            transition: all 0.2s ease;
+        }
+        tbody tr:hover { 
+            background: linear-gradient(90deg, #f8f9ff 0%, #fff5f5 100%);
+            transform: translateX(2px);
+        }
+        tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+        tbody tr:nth-child(even):hover {
+            background: linear-gradient(90deg, #f8f9ff 0%, #fff5f5 100%);
+        }
         
         /* 剧集海报缩略图 */
         .poster-thumb {
@@ -221,6 +238,10 @@
         .action-btn-download:disabled {
             background: #6c757d;
             cursor: not-allowed;
+        }
+        .btn-disabled {
+            background: #6c757d !important;
+            cursor: not-allowed !important;
         }
         
         /* 下载进度标签 */
@@ -844,7 +865,7 @@
                 const rank = start + index + 1;
                 const statusClass = item.status === 'ongoing' ? 'status-ongoing' : 'status-ended';
                 const statusText = item.status === 'ongoing' ? '连载中' : '已完结';
-                const posterUrl = item.poster || '';
+                const posterUrl = item.poster || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2275%22><rect fill=%22%23e8e8e8%22 width=%2250%22 height=%2275%22/><text fill=%22%23999%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2210%22>无海报</text></svg>';
                 
                 // 生成缺失详情文本 - 优化显示
                 let missingDetail = '';
@@ -890,9 +911,9 @@
                 // 获取下载状态（从 download_status 字段，如果没有则默认为 pending）
                 const downloadStatus = item.download_status || 'pending';
                 const statusLabels = {
-                    'pending': '⏳ 待下载',
-                    'downloading': '⬇️ 下载中',
-                    'completed': '✅ 已完成',
+                    'pending': '⏳ 待推送',
+                    'downloading': '⏳ 下载中',
+                    'completed': '✅ 已推送',
                     'failed': '❌ 失败'
                 };
                 const statusClassMap = {
@@ -915,7 +936,11 @@
                         <td><span class="download-status ${statusClassMap[downloadStatus] || 'status-pending'}">${statusLabels[downloadStatus] || '⏳ 待下载'}</span></td>
                         <td>
                             <button class="action-btn action-btn-view" onclick="showDetail(${start + index})">详情</button>
-                            <button class="action-btn action-btn-download" onclick="pushDownload(${start + index})">⬇️</button>
+                            <button class="action-btn action-btn-download ${downloadStatus === 'completed' ? 'btn-disabled' : ''}" 
+                                onclick="pushDownload(${start + index})" 
+                                ${downloadStatus === 'completed' || downloadStatus === 'downloading' ? 'disabled' : ''}>
+                                ${downloadStatus === 'completed' ? '✅' : downloadStatus === 'downloading' ? '⏳' : '⬇️'}
+                            </button>
                         </td>
                     </tr>
                 `;
@@ -1049,7 +1074,7 @@
                 alert(`✅ 已成功推送 ${successCount}/${seasonsToDownload.length} 个季到 MoviePilot\n\nMoviePilot 会自动识别已存在的集数，只下载缺失的集数，不会重复下载！`);
                 
                 // 更新本地状态
-                item.download_status = 'downloading';
+                item.download_status = 'completed';
                 renderTable();
                 
             } catch (e) {

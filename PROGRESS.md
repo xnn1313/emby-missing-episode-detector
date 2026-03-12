@@ -237,3 +237,34 @@ http://192.168.31.20:8080
 
 **记录人：** OpenClaw Assistant  
 **最后更新：** 2026-03-12 15:43
+
+---
+
+## 🛠️ 已安装技能（2026-03-12 15:54）
+
+### 编程开发
+- ✅ `python` - Python 编程指南
+- ✅ `github` - GitHub 操作
+- ✅ `code-analyzer` - 代码分析
+- ✅ `miaoda-app-builder` - 全栈网站构建
+- ✅ `python-script-generator` - Python 脚本生成器
+
+### 代码安全
+- ✅ `yidun-skill-sec` - 代码安全扫描
+
+### 部署运维
+- ✅ `multi-bot-deploy` - 多 Bot 部署
+- ✅ `openclaw-github-assistant` - OpenClaw GitHub 助手
+
+### 数据处理
+- ✅ `webpage-reader-skill` - 网页内容读取
+- ✅ `docs-pdf` - PDF 文档处理
+
+### 自动化
+- ✅ `automation-workflows` - 自动化工作流
+
+### QQ Bot
+- ✅ `qqbot-cron` - QQ 定时提醒
+- ✅ `qqbot-media` - QQ 富媒体收发
+
+**总计：** 12 个技能已安装

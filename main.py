@@ -552,6 +552,14 @@ async def get_last_detection():
     
     latest = results[0]
     
+    # 获取所有已下载的 series_id
+    downloaded_series = set()
+    if db:
+        history = db.get_download_history(limit=1000)
+        for record in history:
+            if record.get('status') in ['success', 'completed']:
+                downloaded_series.add(record.get('series_id'))
+    
     # 转换为卡片数据格式
     cards_map = {}
     for detail in latest.get('missing_details', []):
@@ -566,7 +574,8 @@ async def get_last_detection():
                 'year': '',
                 'status': 'ongoing',
                 'poster': '',
-                'tmdb_id': None
+                'tmdb_id': None,
+                'download_status': 'completed' if series_id in downloaded_series else 'pending'
             }
         
         # 添加该季的缺失信息

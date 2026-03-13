@@ -448,7 +448,7 @@ class DownloadRequest(BaseModel):
 @app.post("/api/download")
 async def push_download(request: DownloadRequest):
     """推送缺失剧集到 MoviePilot 下载"""
-    global moviepilot_client, db, config_manager
+    global db, config_manager
     
     if config_manager is None:
         config_manager = get_config_manager()

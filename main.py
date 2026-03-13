@@ -379,11 +379,50 @@ async def get_results():
 @app.get("/api/cards")
 async def get_cards(page: int = 1, page_size: int = 20):
     """获取海报墙数据（支持分页）"""
-    global last_result
-    if last_result is None:
-        return {"status": "no_data", "message": "暂无检测结果"}
+    global last_result, db
     
-    all_cards = detector.get_card_data(last_result)
+    # 优先使用内存中的检测结果
+    if last_result is not None:
+        all_cards = detector.get_card_data(last_result)
+    elif db is not None:
+        # 从数据库加载最新的检测结果
+        latest = db.get_latest_detection_result(limit=1)
+        if latest and latest[0].get('missing_details'):
+            # 转换为卡片格式
+            all_cards = []
+            for detail in latest[0]['missing_details']:
+                card = {
+                    'series_id': detail['series_id'],
+                    'series_name': detail['series_name'],
+                    'season': detail['season_number'],
+                    'missing_episodes': detail['episode_numbers'],
+                    'missing_count': len(detail['episode_numbers']),
+                    'year': detail.get('year', ''),
+                    'status': detail.get('status', 'ongoing'),
+                    'poster_url': detail.get('poster_url', ''),
+                    'tmdb_id': None,
+                    'total_seasons': 0
+                }
+                all_cards.append(card)
+        else:
+            all_cards = []
+    else:
+        all_cards = []
+    
+    if not all_cards:
+        return {
+            "status": "no_data",
+            "message": "暂无检测结果，请先运行检测",
+            "cards": [],
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": 0,
+                "total_pages": 0,
+                "has_more": False
+            }
+        }
+    
     total = len(all_cards)
     
     # 计算分页

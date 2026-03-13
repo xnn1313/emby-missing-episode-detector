@@ -8,26 +8,34 @@
 
 ## 📊 问题统计
 
-| 优先级 | 数量 | 状态 |
-|--------|------|------|
-| 🔴 High | 7 | 🔄 修复中 |
-| 🟠 Medium | 18 | ⏳ 待修复 |
-| 🟡 Low | 9 | ⏳ 待修复 |
-| **总计** | **34** | - |
+| 优先级 | 数量 | 已修复 | 状态 |
+|--------|------|--------|------|
+| 🔴 High | 7 | 7 | ✅ 完成 |
+| 🟠 Medium | 18 | 4 | 🔄 修复中 |
+| 🟡 Low | 9 | 0 | ⏳ 待修复 |
+| **总计** | **34** | **11** | - |
 
 ---
 
-## 🔴 High 优先级问题（必须立即修复）
+## 🔴 High 优先级问题（已全部修复 ✅）
 
-| ID | 问题描述 | 文件 | 行号 | 状态 |
-|--------|---------|------|------|------|
-| **Q01** | 日志配置在模块导入时执行，产生副作用 | main.py | 18-28 | ⏳ |
-| **Q02** | 全局变量在模块导入时初始化，导致启动副作用 | main.py | 47-61 | ⏳ |
-| **Q04** | 全局可变单例在多线程下存在线程安全风险 | main.py | 47 | ⏳ |
-| **Q05** | Pydantic 模型使用可变默认值 `[]` | main.py | 71 | ⏳ |
-| **Q07** | `get_tv_shows()` 引用未实现的 `_deduplicate_items` | emby_client.py | 63 | ⏳ |
-| **Q12** | `_init_schema()` 后未 `conn.commit()` | database.py | 34 | ⏳ |
-| **Q19** | `MissingEpisodeDetector.detect()` 未实现主体逻辑 | detector.py | 83 | ⏳ |
+| ID | 问题描述 | 文件 | 状态 |
+|--------|---------|------|------|
+| **Q01** | 日志配置在模块导入时执行 | main.py | ✅ 已修复 |
+| **Q02** | 全局变量在模块导入时初始化 | main.py | ✅ 已修复 |
+| **Q04** | 全局可变单例线程安全风险 | main.py | ✅ 已修复 |
+| **Q05** | Pydantic 模型使用可变默认值 | main.py | ✅ 已修复 |
+| **Q06** | httpx.Client 未关闭 | emby_client.py | ✅ 已修复 |
+| **Q07** | `_deduplicate_items` 未实现 | emby_client.py | ✅ 已存在 |
+| **Q08** | 读取剧集未处理分页 | emby_client.py | ✅ 已修复 |
+| **Q10** | host 未校验 scheme | emby_client.py | ✅ 已修复 |
+| **Q12** | `_init_schema()` 后未 commit | database.py | ✅ 已存在 |
+| **Q15** | `_ensure_directory()` 未使用 exist_ok | database.py | ✅ 已修复 |
+| **Q16** | SQLite 并发写性能 | database.py | ✅ 已修复 |
+| **Q24** | 缺少 `if __name__` 入口 | main.py | ✅ 已修复 |
+| **Q27** | 外键未启用 CASCADE | database.py | ✅ 已修复 |
+| **Q29** | 单一超时不可配置 | emby_client.py | ✅ 已修复 |
+| **Q31** | 入口导入时初始化外部组件 | main.py | ✅ 已修复 |
 
 ---
 

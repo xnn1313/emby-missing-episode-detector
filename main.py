@@ -484,6 +484,9 @@ async def push_download(request: DownloadRequest):
         if db is None:
             from app.database import get_database
             db = get_database()
+            logger.info("初始化数据库实例")
+        
+        logger.info(f"保存下载记录：series_id={request.series_id}, season={request.season}, db={db}")
         
         # 无论成功失败都保存记录（用于前端显示状态）
         subscribe_id = result.get('id') if result else None
@@ -496,6 +499,8 @@ async def push_download(request: DownloadRequest):
             episode_numbers=request.episodes,
             moviepilot_task_id=str(subscribe_id) if subscribe_id else None
         )
+        
+        logger.info(f"下载记录已保存：record_id={record_id}")
         
         if status == 'completed':
             return {

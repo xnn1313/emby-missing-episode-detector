@@ -72,10 +72,20 @@ class Database:
                     series_name TEXT NOT NULL,
                     season_number INTEGER NOT NULL,
                     episode_numbers TEXT NOT NULL,
+                    poster_url TEXT DEFAULT '',
+                    year TEXT DEFAULT '',
+                    status TEXT DEFAULT 'ongoing',
                     detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (detection_id) REFERENCES detection_history(id)
                 )
             ''')
+            
+            # 添加索引（如果不存在）
+            try:
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_missing_series ON missing_episodes(series_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_missing_detection ON missing_episodes(detection_id)')
+            except Exception as e:
+                logger.debug(f"索引已存在或创建失败：{e}")
             
             # 剧集信息表
             cursor.execute('''
@@ -150,14 +160,17 @@ class Database:
                         if season.missing_episodes:
                             cursor.execute('''
                                 INSERT INTO missing_episodes 
-                                (detection_id, series_id, series_name, season_number, episode_numbers)
-                                VALUES (?, ?, ?, ?, ?)
+                                (detection_id, series_id, series_name, season_number, episode_numbers, poster_url, year, status)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 detection_id,
                                 series.series_id,
                                 series.series_name,
                                 season.season_number,
-                                json.dumps(season.missing_episodes)
+                                json.dumps(season.missing_episodes),
+                                series.poster_url or '',
+                                series.year or '',
+                                series.status or 'ongoing'
                             ))
             
             conn.commit()
@@ -361,7 +374,7 @@ class Database:
                 
                 # 获取该次检测的缺集详情
                 cursor.execute('''
-                    SELECT series_id, series_name, season_number, episode_numbers
+                    SELECT series_id, series_name, season_number, episode_numbers, poster_url, year, status
                     FROM missing_episodes
                     WHERE detection_id = ?
                     ORDER BY series_name, season_number

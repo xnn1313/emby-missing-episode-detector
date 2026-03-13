@@ -571,9 +571,9 @@ async def get_last_detection():
                 'missing_count': 0,
                 'total_seasons': 0,
                 'seasons': [],
-                'year': '',
-                'status': 'ongoing',
-                'poster': '',
+                'year': detail.get('year', ''),
+                'status': detail.get('status', 'ongoing'),
+                'poster': detail.get('poster_url', ''),
                 'tmdb_id': None,
                 'download_status': 'completed' if series_id in downloaded_series else 'pending'
             }

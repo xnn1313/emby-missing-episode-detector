@@ -5,37 +5,76 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emby 缺集检测系统</title>
     <style>
+        /* CSS 变量 - 浅色主题（默认） */
+        :root {
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --container-bg: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --border-color: #dddddd;
+            --tab-bg: #f8f9fa;
+            --tab-hover: #e9ecef;
+            --input-bg: #ffffff;
+            --card-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            --table-header-bg: #f8f9fa;
+            --table-row-hover: #f8f9fa;
+            --badge-missing-bg: #dc3545;
+            --badge-downloading-bg: #ffc107;
+            --badge-complete-bg: #28a745;
+        }
+
+        /* CSS 变量 - 暗黑主题 */
+        body.dark-mode {
+            --bg-gradient: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            --container-bg: #1e1e2e;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --border-color: #3a3a4e;
+            --tab-bg: #2a2a3e;
+            --tab-hover: #3a3a4e;
+            --input-bg: #2a2a3e;
+            --card-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            --table-header-bg: #2a2a3e;
+            --table-row-hover: #3a3a4e;
+            --badge-missing-bg: #e63946;
+            --badge-downloading-bg: #ffb703;
+            --badge-complete-bg: #2a9d8f;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
             min-height: 100vh;
             padding: 20px;
+            transition: background 0.3s ease;
         }
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            background: white;
+            background: var(--container-bg);
             border-radius: 16px;
             padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: var(--card-shadow);
+            transition: background 0.3s ease, box-shadow 0.3s ease;
         }
-        h1 { color: #333; margin-bottom: 10px; font-size: 28px; }
-        .subtitle { color: #666; margin-bottom: 20px; font-size: 14px; }
+        h1 { color: var(--text-primary); margin-bottom: 10px; font-size: 28px; }
+        .subtitle { color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; }
         
         /* 标签页 */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
         .tab {
             padding: 10px 20px;
             border: none;
-            background: #f8f9fa;
+            background: var(--tab-bg);
+            color: var(--text-primary);
             border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
             transition: all 0.2s;
         }
-        .tab:hover { background: #e9ecef; }
-        .tab.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .tab:hover { background: var(--tab-hover); }
+        .tab.active { background: var(--bg-gradient); color: white; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
@@ -47,7 +86,7 @@
             margin-bottom: 20px;
         }
         .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
             color: white;
             padding: 20px;
             border-radius: 12px;
@@ -58,19 +97,21 @@
         
         /* 表单 */
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; }
+        .form-group label { display: block; margin-bottom: 5px; color: var(--text-primary); font-weight: 500; }
         .form-group input, .form-group select {
             width: 100%;
             padding: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 6px;
             font-size: 14px;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         
         /* 按钮 */
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -85,11 +126,32 @@
         .btn-success { background: #28a745; }
         .btn-sm { padding: 6px 12px; font-size: 13px; }
         
+        /* 暗黑模式切换按钮 */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--container-bg);
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .theme-toggle:hover { transform: scale(1.1); }
+        
         /* 媒体库选择 */
         .library-list {
             max-height: 300px;
             overflow-y: auto;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 10px;
             margin-top: 10px;
@@ -98,15 +160,15 @@
             display: flex;
             align-items: center;
             padding: 10px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--border-color);
             cursor: pointer;
         }
         .library-item:last-child { border-bottom: none; }
-        .library-item:hover { background: #f8f9fa; }
+        .library-item:hover { background: var(--tab-hover); }
         .library-item input[type="checkbox"] { margin-right: 10px; }
         .library-info { flex: 1; }
-        .library-name { font-weight: 600; color: #333; }
-        .library-path { font-size: 12px; color: #666; margin-top: 3px; }
+        .library-name { font-weight: 600; color: var(--text-primary); }
+        .library-path { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
         
         /* 列表视图 */
         .list-controls {
@@ -120,22 +182,25 @@
             flex: 1;
             min-width: 200px;
             padding: 10px 15px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             font-size: 14px;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
         .filter-select {
             padding: 10px 15px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             font-size: 14px;
-            background: white;
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
         
         /* 表格 */
         .table-container {
             overflow-x: auto;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             max-height: calc(100vh - 400px);
             overflow-y: auto;
@@ -150,14 +215,15 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
         }
         thead {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-gradient);
             color: white;
         }
         th, td {
             padding: 12px 14px;
             text-align: left;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--border-color);
             white-space: nowrap;
+            color: var(--text-primary);
         }
         td:last-child {
             white-space: normal;
@@ -171,18 +237,18 @@
         th:hover { opacity: 0.9; }
         th.sorted { background: rgba(255,255,255,0.2); }
         tbody tr {
-            background: white;
+            background: var(--container-bg);
             transition: all 0.2s ease;
         }
         tbody tr:hover { 
-            background: linear-gradient(90deg, #f8f9ff 0%, #fff5f5 100%);
+            background: var(--table-row-hover);
             transform: translateX(2px);
         }
         tbody tr:nth-child(even) {
-            background: #fafafa;
+            background: var(--table-header-bg);
         }
         tbody tr:nth-child(even):hover {
-            background: linear-gradient(90deg, #f8f9ff 0%, #fff5f5 100%);
+            background: var(--table-row-hover);
         }
         
         /* 剧集海报缩略图 */
@@ -191,7 +257,7 @@
             height: 75px;
             object-fit: cover;
             border-radius: 4px;
-            background: #ddd;
+            background: var(--border-color);
         }
         
         /* 状态标签 */
@@ -210,7 +276,7 @@
             display: inline-block;
             padding: 4px 10px;
             border-radius: 4px;
-            background: #ff4757;
+            background: var(--badge-missing-bg);
             color: white;
             font-weight: 600;
             font-size: 13px;
@@ -376,6 +442,9 @@
     </style>
 </head>
 <body>
+    <!-- 暗黑模式切换按钮 -->
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    
     <div class="container">
         <h1>📺 Emby 缺集检测系统</h1>
         <p class="subtitle">列表视图 · 媒体库过滤 · 自动检测 · 智能去重</p>
@@ -590,6 +659,23 @@
         function toggleMoviePilotOptions() {
             const enabled = document.getElementById('moviepilotEnabled').checked;
             document.getElementById('moviepilotOptions').style.display = enabled ? 'block' : 'none';
+        }
+        
+        // 暗黑模式切换
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
+        }
+        
+        // 初始化主题
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('themeToggle').textContent = '☀️';
+            }
         }
         
         async function loadLibraries() {
@@ -1113,6 +1199,9 @@
                 alert('推送失败：' + e.message);
             }
         }
+        
+        // 页面加载时初始化主题
+        initTheme();
         
         // 页面加载时尝试加载数据
         loadData();

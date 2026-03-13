@@ -98,8 +98,13 @@ class FullConfig(BaseModel):
 
 
 class DetectionStatus(BaseModel):
-    """检测状态"""
+    """检测状态（扩展信息）"""
     status: str
+    message: str = ""
+    total_series: int = 0
+    series_with_missing: int = 0
+    total_missing: int = 0
+    last_detection: Optional[str] = None
     message: str
     total_series: int = 0
     series_with_missing: int = 0

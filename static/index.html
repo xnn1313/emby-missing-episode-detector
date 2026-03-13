@@ -500,10 +500,6 @@
                 <span>仪表盘</span>
                 <span class="badge" id="missingBadge">0</span>
             </a>
-            <a class="nav-item" onclick="showPage('all-series')">
-                <i class="fas fa-layer-group"></i>
-                <span>全部剧集</span>
-            </a>
             <a class="nav-item" onclick="showPage('download')">
                 <i class="fas fa-download"></i>
                 <span>下载管理</span>
@@ -519,10 +515,6 @@
             <a class="nav-item" onclick="showPage('history')">
                 <i class="fas fa-history"></i>
                 <span>检测历史</span>
-            </a>
-            <a class="nav-item" onclick="showPage('statistics')">
-                <i class="fas fa-chart-bar"></i>
-                <span>统计</span>
             </a>
         </nav>
 
@@ -638,19 +630,6 @@
             </div>
         </div>
 
-        <!-- 全部剧集页面 -->
-        <div id="page-all-series" class="page">
-            <div class="top-bar">
-                <h2>全部剧集</h2>
-            </div>
-            <div id="allSeriesGrid" class="series-grid">
-                <div class="empty-state">
-                    <i class="fas fa-layer-group"></i>
-                    <p>请先运行检测</p>
-                </div>
-            </div>
-        </div>
-
         <!-- 下载管理页面 -->
         <div id="page-download" class="page">
             <div class="top-bar">
@@ -715,19 +694,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- 统计页面 -->
-        <div id="page-statistics" class="page">
-            <div class="top-bar">
-                <h2>统计信息</h2>
-            </div>
-            <div id="statisticsContent">
-                <div class="empty-state">
-                    <i class="fas fa-chart-bar"></i>
-                    <p>暂无统计数据</p>
-                </div>
-            </div>
-        </div>
     </main>
 
     <script>
@@ -748,11 +714,9 @@
 
             // 加载对应数据
             if (pageId === 'dashboard') loadDashboard();
-            if (pageId === 'all-series') loadAllSeries();
             if (pageId === 'download') loadDownloads();
             if (pageId === 'config') loadConfig();
             if (pageId === 'history') loadHistory();
-            if (pageId === 'statistics') loadStatistics();
         }
 
         function toggleSidebar() {
@@ -805,12 +769,18 @@
             const uniqueSeries = new Set(cards.map(c => c.series_id));
             const total = uniqueSeries.size;
             const missing = cards.length;
-            const episodes = cards.reduce((sum, c) => sum + (c.missing_episodes ? c.missing_episodes.length : 0), 0);
+            // 计算缺失总集数
+            const episodes = cards.reduce((sum, c) => {
+                const count = Array.isArray(c.missing_episodes) ? c.missing_episodes.length : 0;
+                return sum + count;
+            }, 0);
 
             document.getElementById('statTotal').textContent = total;
             document.getElementById('statMissing').textContent = missing;
             document.getElementById('statEpisodes').textContent = episodes;
             document.getElementById('missingBadge').textContent = missing;
+            
+            console.log('Stats:', { total, missing, episodes, cardsCount: cards.length });
         }
 
         function renderCards(cards, container) {
@@ -820,22 +790,28 @@
             }
 
             container.innerHTML = cards.map(card => {
-                const hasMissing = card.missing_episodes && card.missing_episodes.length > 0;
+                // 确保 missing_episodes 是数组
+                const missingEps = Array.isArray(card.missing_episodes) ? card.missing_episodes : [];
+                const hasMissing = missingEps.length > 0;
+                const posterUrl = card.poster_url || card.poster || '';
+                
+                console.log('Card:', card.series_name, 'Season', card.season, 'hasMissing:', hasMissing, 'missingCount:', missingEps.length);
+                
                 return `
-                <div class="series-card" data-name="${card.series_name || ''}" data-year="${card.year || ''}" data-missing="${hasMissing ? card.missing_episodes.length : 0}">
-                    <div class="series-card-header">
-                        ${card.poster_url 
-                            ? `<img src="${card.poster_url}" alt="${card.series_name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                <div class="series-card" data-name="${card.series_name || ''}" data-year="${card.year || ''}" data-missing="${missingEps.length}">
+                    <div class="series-card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        ${posterUrl 
+                            ? `<img src="${posterUrl}" alt="${card.series_name}" crossorigin="anonymous" onload="this.style.opacity='1'" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
                             : ''}
-                        <div class="placeholder" style="${card.poster_url ? 'display:none' : 'display:flex'}">
-                            <i class="fas fa-tv"></i>
+                        <div class="placeholder" style="${posterUrl ? 'display:none' : 'display:flex'}; align-items:center; justify-content:center; height:100%;">
+                            <i class="fas fa-tv" style="font-size:64px; opacity:0.5;"></i>
                         </div>
                         <div class="series-card-badge ${hasMissing ? 'missing' : 'complete'}">
                             ${hasMissing ? '缺集' : '完整'}
                         </div>
                     </div>
                     <div class="series-card-body">
-                        <h3 class="series-card-title">${card.series_name || '未知剧集'}</h3>
+                        <h3 class="series-card-title" title="${card.series_name || ''}">${card.series_name || '未知剧集'}</h3>
                         <div class="series-card-meta">
                             <span><i class="fas fa-calendar"></i> ${card.year || '未知'}</span>
                             <span><i class="fas fa-layer-group"></i> 第${card.season || 1}季</span>
@@ -843,7 +819,7 @@
                         <div class="series-card-tags">
                             <span class="tag season">S${card.season || 1}</span>
                             ${card.year ? `<span class="tag year">${card.year}</span>` : ''}
-                            ${hasMissing ? `<span class="tag missing">缺失 ${card.missing_episodes.length} 集</span>` : ''}
+                            ${hasMissing ? `<span class="tag missing">缺失 ${missingEps.length} 集</span>` : ''}
                         </div>
                         ${hasMissing ? `
                             <div class="series-card-missing">
@@ -851,10 +827,8 @@
                                     <i class="fas fa-exclamation-triangle"></i> 缺失剧集
                                 </div>
                                 <div class="missing-episodes">
-                                    ${card.missing_episodes.slice(0, 10).map(ep => 
-                                        `<span class="missing-ep">E${ep}</span>`
-                                    ).join('')}
-                                    ${card.missing_episodes.length > 10 ? `<span class="missing-ep">+${card.missing_episodes.length - 10}</span>` : ''}
+                                    ${missingEps.slice(0, 10).map(ep => `<span class="missing-ep">E${ep}</span>`).join('')}
+                                    ${missingEps.length > 10 ? `<span class="missing-ep">+${missingEps.length - 10}</span>` : ''}
                                 </div>
                             </div>
                         ` : ''}
@@ -864,7 +838,7 @@
                                     <i class="fas fa-download"></i>
                                     推送下载
                                    </button>`
-                                : `<button class="btn btn-outline" disabled style="width:100%">
+                                : `<button class="btn btn-outline" disabled style="width:100%; cursor:not-allowed;">
                                     <i class="fas fa-check"></i>
                                     已完整
                                    </button>`
@@ -971,25 +945,6 @@
 
         async function refreshData() {
             loadDashboard();
-        }
-
-        async function loadAllSeries() {
-            // 复用仪表盘的数据
-            const container = document.getElementById('allSeriesGrid');
-            if (currentData && currentData.length > 0) {
-                renderCards(currentData, container);
-            } else {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-layer-group"></i>
-                        <p>暂无数据</p>
-                        <button class="btn btn-primary" style="margin-top: 20px;" onclick="showPage('dashboard'); setTimeout(runDetection, 100);">
-                            <i class="fas fa-play"></i>
-                            去检测
-                        </button>
-                    </div>
-                `;
-            }
         }
 
         async function loadStatistics() {

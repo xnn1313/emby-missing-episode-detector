@@ -19,6 +19,10 @@ class EmbyClient:
             host: Emby 服务器地址 (如 http://localhost:8096)
             api_key: API 密钥
         """
+        # 标准化 host（确保有 scheme）
+        if not host.startswith(('http://', 'https://')):
+            host = 'http://' + host
+        
         self.host = host.rstrip('/')
         self.api_key = api_key
         self.client = httpx.Client(
@@ -27,9 +31,14 @@ class EmbyClient:
                 'X-Emby-Token': api_key,
                 'Content-Type': 'application/json'
             },
-            timeout=30.0
+            timeout=httpx.Timeout(connect=5.0, read=30.0, write=30.0)
         )
         logger.info(f"Emby 客户端已初始化：{self.host}")
+    
+    def close(self):
+        """关闭客户端（释放连接池）"""
+        if self.client:
+            self.client.close()
     
     def test_connection(self) -> bool:
         """测试连接是否正常"""
@@ -62,7 +71,7 @@ class EmbyClient:
             logger.error(f"获取媒体库失败：{e}")
             return []
     
-    def get_tv_shows(self, library_id: Optional[str] = None, library_ids: Optional[List[str]] = None, dedup_by_name: bool = True) -> List[Dict]:
+    def get_tv_shows(self, library_id: Optional[str] = None, library_ids: Optional[List[str]] = None, dedup_by_name: bool = True, limit: int = 10000) -> List[Dict]:
         """
         获取所有剧集
         
@@ -99,18 +108,25 @@ class EmbyClient:
                 items = self._deduplicate_items(all_items, dedup_by_name)
                 logger.info(f"从 {len(library_ids)} 个媒体库获取到 {len(items)} 个剧集（去重后）")
             else:
-                # 获取所有库的剧集
+                # 获取所有库的剧集（带分页和 limit）
                 params = {
                     'IncludeItemTypes': 'Series',
                     'Recursive': True,
-                    'Fields': 'Overview,AirTime,Studios,Genres,ProductionYear,PremiereDate'
+                    'Fields': 'Overview,AirTime,Studios,Genres,ProductionYear,PremiereDate',
+                    'Limit': limit
                 }
                 response = self.client.get('/Items', params=params)
                 if response.status_code == 200:
                     data = response.json()
                     all_items = data.get('Items', [])
+                    total_count = data.get('TotalRecordCount', len(all_items))
+                    
+                    # 如果数据量超过 limit，记录警告
+                    if total_count > limit:
+                        logger.warning(f"剧集数量 ({total_count}) 超过 limit ({limit})，可能漏数据。建议增加 limit 或实现分页")
+                    
                     items = self._deduplicate_items(all_items, dedup_by_name)
-                    logger.info(f"获取到 {len(items)} 个剧集（去重后）")
+                    logger.info(f"获取到 {len(items)} 个剧集（去重后），总数约：{total_count}")
         except Exception as e:
             logger.error(f"获取剧集失败：{e}")
         

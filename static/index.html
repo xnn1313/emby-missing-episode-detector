@@ -700,6 +700,7 @@
         // ========== 全局状态 ==========
         let currentData = null;
         let filteredData = [];
+        let downloadedHistory = []; // 已推送下载的记录
 
         // ========== 页面导航 ==========
         function showPage(pageId) {
@@ -734,14 +735,24 @@
             grid.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>加载中...</p></div>';
 
             try {
-                const response = await fetch('/api/cards');
-                const data = await response.json();
+                // 并行加载卡片数据和下载历史
+                const [cardsRes, historyRes] = await Promise.all([
+                    fetch('/api/cards'),
+                    fetch('/api/download/history')
+                ]);
+                
+                const cardsData = await cardsRes.json();
+                const historyData = await historyRes.json();
+                
+                // 保存下载历史
+                downloadedHistory = historyData.status === 'success' ? (historyData.history || []) : [];
+                console.log('已推送下载记录:', downloadedHistory.length);
 
-                if (data.status === 'success' && data.cards && data.cards.length > 0) {
-                    currentData = data.cards;
-                    filteredData = data.cards;
-                    updateStats(data.cards);
-                    renderCards(data.cards, grid);
+                if (cardsData.status === 'success' && cardsData.cards && cardsData.cards.length > 0) {
+                    currentData = cardsData.cards;
+                    filteredData = cardsData.cards;
+                    updateStats(cardsData.cards);
+                    renderCards(cardsData.cards, grid);
                 } else {
                     grid.innerHTML = `
                         <div class="empty-state">
@@ -795,7 +806,12 @@
                 const hasMissing = missingEps.length > 0;
                 const posterUrl = card.poster_url || card.poster || '';
                 
-                console.log('Card:', card.series_name, 'Season', card.season, 'hasMissing:', hasMissing, 'missingCount:', missingEps.length);
+                // 检查是否已推送下载
+                const isDownloaded = downloadedHistory.some(h => 
+                    h.series_id === card.series_id && h.season_number === card.season
+                );
+                
+                console.log('Card:', card.series_name, 'S' + card.season, 'downloaded:', isDownloaded);
                 
                 return `
                 <div class="series-card" data-name="${card.series_name || ''}" data-year="${card.year || ''}" data-missing="${missingEps.length}">
@@ -833,15 +849,20 @@
                             </div>
                         ` : ''}
                         <div class="series-card-actions">
-                            ${hasMissing 
-                                ? `<button class="btn btn-primary" onclick="pushDownload('${card.series_id || ''}', '${(card.series_name || '').replace(/'/g, "\\'")}', ${card.season || 1})">
-                                    <i class="fas fa-download"></i>
-                                    推送下载
-                                   </button>`
-                                : `<button class="btn btn-outline" disabled style="width:100%; cursor:not-allowed;">
+                            ${!hasMissing
+                                ? `<button class="btn btn-outline" disabled style="width:100%; cursor:not-allowed;">
                                     <i class="fas fa-check"></i>
                                     已完整
                                    </button>`
+                                : isDownloaded
+                                    ? `<button class="btn btn-outline" disabled style="width:100%; cursor:not-allowed;">
+                                        <i class="fas fa-check-circle"></i>
+                                        已推送
+                                       </button>`
+                                    : `<button class="btn btn-primary" onclick="pushDownload('${card.series_id || ''}', '${(card.series_name || '').replace(/'/g, "\\'")}', ${card.season || 1})">
+                                        <i class="fas fa-download"></i>
+                                        推送下载
+                                       </button>`
                             }
                         </div>
                     </div>

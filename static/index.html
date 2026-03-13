@@ -605,9 +605,7 @@
             <div class="filter-bar">
                 <select class="filter-select" id="filterSeason" onchange="filterSeries()">
                     <option value="">全部季</option>
-                    <option value="1">第 1 季</option>
-                    <option value="2">第 2 季</option>
-                    <option value="3">第 3 季</option>
+                    <!-- 动态生成季选项 -->
                 </select>
                 <select class="filter-select" id="filterStatus" onchange="filterSeries()">
                     <option value="">全部状态</option>
@@ -791,7 +789,34 @@
             document.getElementById('statEpisodes').textContent = episodes;
             document.getElementById('missingBadge').textContent = missing;
             
+            // 动态生成季筛选选项
+            updateSeasonFilter(cards);
+            
             console.log('Stats:', { total, missing, episodes, cardsCount: cards.length });
+        }
+        
+        function updateSeasonFilter(cards) {
+            const seasonFilter = document.getElementById('filterSeason');
+            const seasons = new Set(cards.map(c => c.season).filter(s => s));
+            const currentOptions = Array.from(seasonFilter.options).map(o => o.value);
+            
+            // 如果季选项没有变化，不更新
+            const hasAll = currentOptions.includes('');
+            const seasonValues = Array.from(seasons).map(String);
+            const needsUpdate = !hasAll || seasonValues.some(s => !currentOptions.includes(s));
+            
+            if (!needsUpdate) return;
+            
+            // 保留"全部季"选项
+            seasonFilter.innerHTML = '<option value="">全部季</option>';
+            
+            // 添加季选项（排序）
+            Array.from(seasons).sort((a, b) => a - b).forEach(season => {
+                const option = document.createElement('option');
+                option.value = season;
+                option.textContent = `第${season}季`;
+                seasonFilter.appendChild(option);
+            });
         }
 
         function renderCards(cards, container) {

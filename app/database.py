@@ -7,7 +7,7 @@ import os
 import sqlite3
 import json
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from loguru import logger
 from contextlib import contextmanager
@@ -305,6 +305,7 @@ class Database:
                     SET status = ?
                     WHERE id = ?
                 ''', (status, record_id))
+            conn.commit()
             return cursor.rowcount > 0
     
     def get_download_history(self, series_id: Optional[str] = None, 

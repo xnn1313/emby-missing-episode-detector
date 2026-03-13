@@ -573,7 +573,7 @@ async def get_last_detection():
     if db:
         history = db.get_download_history(limit=1000)
         for record in history:
-            if record.get('status') in ['success', 'completed']:
+            if record.get('status') == 'completed':
                 downloaded_series.add(record.get('series_id'))
     
     # 转换为卡片数据格式

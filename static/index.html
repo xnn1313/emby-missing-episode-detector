@@ -913,8 +913,25 @@
         }
 
         async function pushDownload(seriesId, seriesName, season) {
+            console.log('推送下载:', { seriesId, seriesName, season });
+            
+            // 从卡片数据属性获取缺集信息
             const card = event.currentTarget.closest('.series-card');
-            const missingEps = card.querySelectorAll('.missing-ep').map(ep => parseInt(ep.textContent.replace('E', '')));
+            
+            // 尝试从全局数据获取缺集
+            const cardData = currentData.find(c => c.series_id === seriesId && c.season === season);
+            const missingEps = cardData && cardData.missing_episodes ? cardData.missing_episodes : [];
+            
+            console.log('缺失集数:', missingEps);
+            
+            if (!seriesId || !seriesName) {
+                alert('错误：剧集信息不完整');
+                return;
+            }
+
+            const btn = event.currentTarget;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 推送中...';
 
             try {
                 const response = await fetch('/api/download', {
@@ -929,17 +946,24 @@
                 });
 
                 const data = await response.json();
-                if (data.status === 'success') {
-                    alert('推送成功！\n\nMoviePilot 将自动下载缺失剧集');
-                    event.currentTarget.innerHTML = '<i class="fas fa-check"></i> 已推送';
-                    event.currentTarget.disabled = true;
-                    event.currentTarget.classList.remove('btn-primary');
-                    event.currentTarget.classList.add('btn-outline');
+                console.log('推送响应:', data);
+                
+                if (response.ok && data.status === 'success') {
+                    alert('✅ 推送成功！\n\n剧集：' + seriesName + ' 第' + season + '季\nMoviePilot 将自动下载缺失剧集');
+                    btn.innerHTML = '<i class="fas fa-check"></i> 已推送';
+                    btn.disabled = true;
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline');
                 } else {
-                    alert('推送失败：' + (data.message || data.detail || '未知错误'));
+                    alert('❌ 推送失败：' + (data.detail || data.message || '未知错误'));
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-download"></i> 推送下载';
                 }
             } catch (error) {
-                alert('推送失败：' + error.message);
+                console.error('推送异常:', error);
+                alert('❌ 推送异常：' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> 推送下载';
             }
         }
 

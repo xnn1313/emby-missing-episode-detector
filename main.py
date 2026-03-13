@@ -29,15 +29,17 @@ from app.database import get_database, Database
 from app.export import ReportExporter
 from app.config_manager import get_config_manager, ConfigManager
 
-# 配置日志
-logger.remove()
-logger.add(
-    project_root / "logs" / "emby-detector.log",
-    level="INFO",
-    rotation="100 MB",
-    retention="7 days"
-)
-logger.add(sys.stdout, level="INFO")
+def setup_logging():
+    """配置日志（延迟初始化，避免导入时副作用）"""
+    logger.remove()
+    logger.add(
+        project_root / "logs" / "emby-detector.log",
+        level="INFO",
+        rotation="100 MB",
+        retention="7 days",
+        mode='a'
+    )
+    logger.add(sys.stdout, level="INFO", format="{time:HH:mm:ss} | {level} | {message}")
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -46,7 +48,7 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# 全局变量
+# 全局变量（通过依赖注入管理，避免导入时初始化）
 emby_client: Optional[EmbyClient] = None
 tmdb_client: Optional[TMDBClient] = None
 tmdb_matcher: Optional[TMDBMatcher] = None

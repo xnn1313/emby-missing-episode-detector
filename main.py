@@ -377,13 +377,31 @@ async def get_results():
 
 
 @app.get("/api/cards")
-async def get_cards():
-    """获取海报墙数据"""
+async def get_cards(page: int = 1, page_size: int = 20):
+    """获取海报墙数据（支持分页）"""
     global last_result
     if last_result is None:
         return {"status": "no_data", "message": "暂无检测结果"}
-    cards = detector.get_card_data(last_result)
-    return {"status": "success", "cards": cards}
+    
+    all_cards = detector.get_card_data(last_result)
+    total = len(all_cards)
+    
+    # 计算分页
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_cards = all_cards[start:end]
+    
+    return {
+        "status": "success",
+        "cards": page_cards,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size,
+            "has_more": end < total
+        }
+    }
 
 
 @app.get("/api/health")

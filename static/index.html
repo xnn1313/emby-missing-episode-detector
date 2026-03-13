@@ -699,6 +699,13 @@
         let currentData = null;
         let filteredData = [];
         let downloadedHistory = []; // 已推送下载的记录
+        
+        // 分页相关
+        let currentPage = 1;
+        let pageSize = 20; // 每页 20 个
+        let isLoading = false;
+        let hasMore = true;
+        let allCards = []; // 缓存所有卡片数据
 
         // ========== 页面导航 ==========
         function showPage(pageId) {
@@ -731,11 +738,17 @@
         async function loadDashboard() {
             const grid = document.getElementById('seriesGrid');
             grid.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>加载中...</p></div>';
+            
+            // 重置分页状态
+            currentPage = 1;
+            isLoading = false;
+            hasMore = true;
+            allCards = [];
 
             try {
                 // 并行加载卡片数据和下载历史
                 const [cardsRes, historyRes] = await Promise.all([
-                    fetch('/api/cards'),
+                    fetch(`/api/cards?page=${currentPage}&page_size=${pageSize}`),
                     fetch('/api/download/history')
                 ]);
                 
@@ -747,10 +760,18 @@
                 console.log('已推送下载记录:', downloadedHistory.length);
 
                 if (cardsData.status === 'success' && cardsData.cards && cardsData.cards.length > 0) {
+                    // 保存分页信息
+                    const pagination = cardsData.pagination || {};
+                    allCards = cardsData.cards;
                     currentData = cardsData.cards;
                     filteredData = cardsData.cards;
+                    hasMore = pagination.has_more || false;
+                    
                     updateStats(cardsData.cards);
                     renderCards(cardsData.cards, grid);
+                    
+                    // 添加滚动监听
+                    setupInfiniteScroll();
                 } else {
                     grid.innerHTML = `
                         <div class="empty-state">
@@ -819,13 +840,15 @@
             });
         }
 
-        function renderCards(cards, container) {
+        function renderCards(cards, container, append = false) {
             if (!cards || cards.length === 0) {
-                container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>没有数据</p></div>';
+                if (!append) {
+                    container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>没有数据</p></div>';
+                }
                 return;
             }
 
-            container.innerHTML = cards.map(card => {
+            const html = cards.map(card => {
                 // 确保 missing_episodes 是数组
                 const missingEps = Array.isArray(card.missing_episodes) ? card.missing_episodes : [];
                 const hasMissing = missingEps.length > 0;
@@ -892,7 +915,82 @@
                         </div>
                     </div>
                 </div>
-            `}).join('');
+            `).join('');
+            
+            if (append) {
+                container.insertAdjacentHTML('beforeend', html);
+            } else {
+                container.innerHTML = html;
+            }
+            
+            // 添加加载更多提示
+            if (hasMore && !isLoading) {
+                const loader = document.createElement('div');
+                loader.id = 'loadMoreTrigger';
+                loader.className = 'loading';
+                loader.innerHTML = '<i class="fas fa-spinner"></i><p>加载更多...</p>';
+                loader.style.display = 'none';
+                container.parentNode.appendChild(loader);
+            }
+        }
+        
+        // 无限滚动加载
+        function setupInfiniteScroll() {
+            const trigger = document.getElementById('loadMoreTrigger');
+            if (!trigger) return;
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !isLoading && hasMore) {
+                        loadMoreCards();
+                    }
+                });
+            }, {
+                rootMargin: '100px' // 提前 100px 加载
+            });
+            
+            observer.observe(trigger);
+        }
+        
+        async function loadMoreCards() {
+            if (isLoading || !hasMore) return;
+            
+            isLoading = true;
+            currentPage++;
+            
+            const trigger = document.getElementById('loadMoreTrigger');
+            if (trigger) {
+                trigger.style.display = 'block';
+            }
+            
+            try {
+                const response = await fetch(`/api/cards?page=${currentPage}&page_size=${pageSize}`);
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.cards && data.cards.length > 0) {
+                    const pagination = data.pagination || {};
+                    allCards = [...allCards, ...data.cards];
+                    hasMore = pagination.has_more || false;
+                    
+                    renderCards(data.cards, document.getElementById('seriesGrid'), true);
+                    
+                    if (!hasMore && trigger) {
+                        trigger.innerHTML = '<p>已经到底啦~</p>';
+                        setTimeout(() => trigger.remove(), 2000);
+                    }
+                } else {
+                    hasMore = false;
+                    if (trigger) trigger.remove();
+                }
+            } catch (error) {
+                console.error('加载更多失败:', error);
+                if (trigger) {
+                    trigger.innerHTML = '<p>加载失败，点击重试</p>';
+                    trigger.onclick = () => loadMoreCards();
+                }
+            } finally {
+                isLoading = false;
+            }
         }
 
         // ========== 筛选和搜索 ==========
@@ -1014,6 +1112,12 @@
         }
 
         async function refreshData() {
+            // 重置分页并重新加载
+            currentPage = 1;
+            hasMore = true;
+            allCards = [];
+            const grid = document.getElementById('seriesGrid');
+            grid.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>加载中...</p></div>';
             loadDashboard();
         }
 

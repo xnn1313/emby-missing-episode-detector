@@ -159,15 +159,28 @@ class EmbyClient:
     
     def get_seasons(self, series_id: str) -> List[Dict]:
         """
-        获取剧集的所有季
+        获取剧集的所有季（自动去重）
         
         Args:
             series_id: 剧集 ID
+        
+        Returns:
+            去重后的季列表
         """
         try:
             response = self.client.get(f'/Shows/{series_id}/Seasons')
             if response.status_code == 200:
-                return response.json().get('Items', [])
+                items = response.json().get('Items', [])
+                # 去重：按 season_id + season_number 组合去重
+                seen = {}
+                for item in items:
+                    season_id = item.get('Id')
+                    season_num = item.get('IndexNumber', 0)
+                    key = f"{season_id}__{season_num}"
+                    if key not in seen:
+                        seen[key] = item
+                logger.debug(f"季去重：{len(items)} → {len(seen)} (series_id={series_id})")
+                return list(seen.values())
             return []
         except Exception as e:
             logger.error(f"获取季信息失败 {series_id}: {e}")

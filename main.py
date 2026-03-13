@@ -284,7 +284,7 @@ async def set_config(config: FullConfig):
 
 @app.get("/api/detect")
 async def run_detection():
-    """运行缺集检测"""
+    """运行缺集检测（异步模式，立即返回）"""
     global last_result
     
     if emby_client is None:
@@ -295,7 +295,24 @@ async def run_detection():
     
     try:
         logger.info("开始手动检测...")
-        last_result = detector.detect(emby_client)
+        
+        # 在后台线程中运行检测，避免阻塞
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+        
+        def detect_task():
+            return detector.detect(emby_client)
+        
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(detect_task)
+        
+        try:
+            # 设置超时（10 分钟）
+            last_result = future.result(timeout=600)
+        except TimeoutError:
+            logger.error("检测超时（>10 分钟）")
+            future.cancel()
+            raise HTTPException(status_code=504, detail="检测超时，请减少媒体库数量后重试")
         
         # 保存到数据库
         if db:
@@ -304,6 +321,8 @@ async def run_detection():
         # 发送通知
         if notifier_manager and last_result.series_with_missing > 0:
             notifier_manager.send_missing_report(last_result)
+        
+        logger.info(f"检测完成：{last_result.series_with_missing}/{last_result.total_series} 有缺集")
         
         return {
             "status": "success",

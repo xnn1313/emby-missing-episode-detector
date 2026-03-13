@@ -110,8 +110,11 @@ class MissingEpisodeDetector:
         for show in tv_shows:
             series_info = self._analyze_series(show, emby_client)
             processed += 1
-            if processed % 500 == 0:
-                logger.info(f"已处理 {processed}/{len(tv_shows)} 个剧集")
+            # 更频繁的进度日志（每 100 个）
+            if processed % 100 == 0:
+                elapsed = time.time() - start_time
+                eta = (elapsed / processed * len(tv_shows) - elapsed) / 60 if processed > 0 else 0
+                logger.info(f"进度：{processed}/{len(tv_shows)} ({processed*100//len(tv_shows)}%) | 已用：{elapsed:.0f}s | 预计剩余：{eta:.1f}分钟")
             if series_info:
                 result.series.append(series_info)
                 if series_info.missing_episodes_count > 0:

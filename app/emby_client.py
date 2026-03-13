@@ -185,21 +185,23 @@ class EmbyClient:
         """
         try:
             response = self.client.get(f'/Shows/{series_id}/Seasons')
-            if response.status_code == 200:
-                items = response.json().get('Items', [])
-                # 去重：按 season_id + season_number 组合去重
-                seen = {}
-                for item in items:
-                    season_id = item.get('Id')
-                    season_num = item.get('IndexNumber', 0)
-                    key = f"{season_id}__{season_num}"
-                    if key not in seen:
-                        seen[key] = item
-                logger.debug(f"季去重：{len(items)} → {len(seen)} (series_id={series_id})")
-                return list(seen.values())
+            response.raise_for_status()  # 对非 2xx 响应抛出异常
+            items = response.json().get('Items', [])
+            # 去重：按 season_id + season_number 组合去重
+            seen = {}
+            for item in items:
+                season_id = item.get('Id')
+                season_num = item.get('IndexNumber', 0)
+                key = f"{season_id}__{season_num}"
+                if key not in seen:
+                    seen[key] = item
+            logger.debug(f"季去重：{len(items)} → {len(seen)} (series_id={series_id})")
+            return list(seen.values())
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"获取季信息失败 {series_id}: HTTP {e.response.status_code}", exc_info=True)
             return []
         except Exception as e:
-            logger.error(f"获取季信息失败 {series_id}: {e}")
+            logger.error(f"获取季信息失败 {series_id}: {e}", exc_info=True)
             return []
     
     def get_episodes_batch(self, series_ids: List[str]) -> Dict[str, List[Dict]]:

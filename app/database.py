@@ -265,15 +265,17 @@ class Database:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO download_history 
-                (series_id, series_name, season_number, episode_numbers, moviepilot_task_id)
-                VALUES (?, ?, ?, ?, ?)
+                (series_id, series_name, season_number, episode_numbers, moviepilot_task_id, status)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 series_id,
                 series_name,
                 season_number,
                 json.dumps(episode_numbers),
-                moviepilot_task_id
+                moviepilot_task_id,
+                'pending' if moviepilot_task_id else 'failed'
             ))
+            conn.commit()
             return cursor.lastrowid
     
     def update_download_status(self, record_id: int, status: str, 

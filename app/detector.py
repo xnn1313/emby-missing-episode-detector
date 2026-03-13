@@ -419,36 +419,34 @@ class MissingEpisodeDetector:
     
     def get_card_data(self, result: DetectionResult) -> List[Dict]:
         """
-        转换为卡片流数据格式
+        转换为卡片流数据格式（每个季一个独立卡片）
         
         Args:
             result: DetectionResult 对象
         
         Returns:
-            卡片数据列表
+            卡片数据列表（扁平结构，每个卡片代表一个季的缺集）
         """
         cards = []
         
         for series in result.series:
             if series.missing_episodes_count > 0:
-                card = {
-                    'series_id': series.series_id,
-                    'series_name': series.series_name,
-                    'year': series.year or '未知',
-                    'poster': series.poster_url or '',
-                    'status': series.status,
-                    'tmdb_id': series.tmdb_id,
-                    'missing_count': series.missing_episodes_count,
-                    'total_seasons': series.total_seasons,
-                    'seasons': [
-                        {
-                            'season_number': s.season_number,
-                            'missing_episodes': s.missing_episodes
+                # 为每个有缺集的季生成一个独立卡片
+                for season in series.seasons:
+                    if season.missing_episodes:
+                        card = {
+                            'series_id': series.series_id,
+                            'series_name': series.series_name,
+                            'year': series.year or '未知',
+                            'poster_url': series.poster_url or '',
+                            'status': series.status or 'ongoing',
+                            'tmdb_id': series.tmdb_id,
+                            'season': season.season_number,
+                            'missing_episodes': season.missing_episodes,
+                            'missing_count': len(season.missing_episodes),
+                            'total_seasons': series.total_seasons
                         }
-                        for s in series.seasons if s.missing_episodes
-                    ]
-                }
-                cards.append(card)
+                        cards.append(card)
         
         # 按缺集数排序
         cards.sort(key=lambda x: x['missing_count'], reverse=True)

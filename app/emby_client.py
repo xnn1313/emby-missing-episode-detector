@@ -173,9 +173,50 @@ class EmbyClient:
             logger.error(f"获取季信息失败 {series_id}: {e}")
             return []
     
+    def get_episodes_batch(self, series_ids: List[str]) -> Dict[str, List[Dict]]:
+        """
+        批量获取多个剧集的所有集（优化性能）
+        
+        Args:
+            series_ids: 剧集 ID 列表
+        
+        Returns:
+            {series_id: [episodes]}
+        """
+        all_episodes = {}
+        
+        try:
+            # 一次性获取所有剧集的所有集
+            params = {
+                'IncludeItemTypes': 'Episode',
+                'Recursive': True,
+                'Fields': 'Overview,AirTime,ProductionYear,PremiereDate,HasMedia',
+                'IsMissing': 'False'
+            }
+            response = self.client.get('/Items', params=params)
+            if response.status_code == 200:
+                data = response.json()
+                episodes = data.get('Items', [])
+                
+                # 按剧集 ID 分组
+                for ep in episodes:
+                    series_id = ep.get('SeriesId')
+                    if series_id and series_id in series_ids:
+                        if series_id not in all_episodes:
+                            all_episodes[series_id] = []
+                        all_episodes[series_id].append(ep)
+                
+                logger.info(f"批量获取到 {len(episodes)} 集，属于 {len(all_episodes)} 个剧集")
+            else:
+                logger.warning(f"批量获取集信息失败：{response.status_code}")
+        except Exception as e:
+            logger.error(f"批量获取集信息失败：{e}")
+        
+        return all_episodes
+    
     def get_episodes(self, series_id: str, season_id: str) -> List[Dict]:
         """
-        获取某一季的所有集
+        获取某一季的所有集（兼容旧方法）
         
         Args:
             series_id: 剧集 ID

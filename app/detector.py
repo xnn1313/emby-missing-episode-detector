@@ -103,8 +103,13 @@ class MissingEpisodeDetector:
         result.total_series = len(tv_shows)
         logger.info(f"发现 {len(tv_shows)} 个剧集")
         
+        # 批量获取所有集（性能优化：避免每个剧集单独调用 API）
+        series_ids = [show.get('Id') for show in tv_shows]
+        episodes_by_series = emby_client.get_episodes_batch(series_ids)
+        logger.info(f"批量获取完成，{len(episodes_by_series)} 个剧集有集数据")
+        
         for show in tv_shows:
-            series_info = self._analyze_series(show, emby_client)
+            series_info = self._analyze_series_optimized(show, emby_client, episodes_by_series)
             if series_info:
                 result.series.append(series_info)
                 if series_info.missing_episodes_count > 0:
@@ -122,8 +127,8 @@ class MissingEpisodeDetector:
         
         return result
     
-    def _analyze_series(self, show: Dict, emby_client) -> Optional[SeriesInfo]:
-        """分析单个剧集"""
+    def _analyze_series_optimized(self, show: Dict, emby_client, episodes_by_series: Dict) -> Optional[SeriesInfo]:
+        """分析单个剧集（优化版本，使用批量获取的集数据）"""
         try:
             series_id = show.get('Id')
             series_name = show.get('Name', 'Unknown')
@@ -136,7 +141,75 @@ class MissingEpisodeDetector:
             if self.use_tmdb:
                 tmdb_id = self.tmdb_matcher.match_series(show)
                 if tmdb_id:
-                    # 获取 TMDB 预期集数
+                    expected_episodes_map = self.tmdb_matcher.tmdb.get_all_seasons_episodes(tmdb_id)
+            
+            series_info = SeriesInfo(
+                series_id=series_id,
+                series_name=series_name,
+                series_path=series_path,
+                tmdb_id=tmdb_id
+            )
+            
+            # 获取基本信息
+            year = show.get('ProductionYear') or show.get('PremiereDate', '')
+            if year:
+                try:
+                    series_info.year = str(year)[:4]
+                except:
+                    pass
+            
+            # 获取状态
+            status = show.get('Status', '')
+            series_info.status = 'ended' if status == 'Ended' else 'ongoing'
+            
+            # 获取海报
+            image_tags = show.get('ImageTags', {})
+            if 'Primary' in image_tags:
+                series_info.poster_url = f"{emby_client.host}/Items/{series_id}/Images/Primary?tag={image_tags['Primary']}"
+            
+            # 获取所有季（去重）
+            seasons = emby_client.get_seasons(series_id)
+            seen_season_numbers = set()
+            unique_seasons = []
+            
+            for season in seasons:
+                season_number = season.get('IndexNumber', 0)
+                if season_number not in seen_season_numbers:
+                    seen_season_numbers.add(season_number)
+                    unique_seasons.append(season)
+            
+            series_info.total_seasons = len(unique_seasons)
+            
+            # 使用批量获取的集数据
+            episodes = episodes_by_series.get(series_id, [])
+            
+            for season in unique_seasons:
+                season_info = self._analyze_season_with_episodes(season, episodes, expected_episodes_map)
+                if season_info:
+                    series_info.seasons.append(season_info)
+                    series_info.total_episodes += len(season_info.episodes)
+                    series_info.missing_episodes_count += len(season_info.missing_episodes)
+            
+            return series_info
+            
+        except Exception as e:
+            logger.error(f"分析剧集失败 {show.get('Name')}: {e}")
+            return None
+    
+    def _analyze_series(self, show: Dict, emby_client) -> Optional[SeriesInfo]:
+        """分析单个剧集（旧方法，保留兼容）"""
+        try:
+            series_id = show.get('Id')
+            series_name = show.get('Name', 'Unknown')
+            series_path = show.get('Path', '')
+            
+            # 获取 TMDB 信息
+            tmdb_id = None
+            expected_episodes_map = {}
+            
+            if self.use_tmdb:
+                tmdb_id = self.tmdb_matcher.match_series(show)
+                if tmdb_id:
                     expected_episodes_map = self.tmdb_matcher.tmdb.get_all_seasons_episodes(tmdb_id)
             
             series_info = SeriesInfo(
@@ -189,8 +262,68 @@ class MissingEpisodeDetector:
             logger.error(f"分析剧集失败 {show.get('Name')}: {e}")
             return None
     
+    def _analyze_season_with_episodes(self, season: Dict, all_episodes: List[Dict], expected_episodes_map: Dict) -> Optional[SeasonInfo]:
+        """分析某一季（使用批量获取的集数据）"""
+        try:
+            season_number = season.get('IndexNumber', 0)
+            # 跳过特别季
+            if season_number == 0:
+                return None
+            
+            season_id = season.get('Id')
+            season_name = season.get('Name', f'Season {season_number}')
+            
+            season_info = SeasonInfo(
+                season_number=season_number,
+                season_id=season_id,
+                season_name=season_name
+            )
+            
+            # 获取预期集数（如果有 TMDB 数据）
+            if season_number in expected_episodes_map:
+                season_info.expected_episodes = len(expected_episodes_map[season_number])
+            
+            # 从批量数据中筛选该季的集
+            season_episodes = [ep for ep in all_episodes if ep.get('ParentIndexNumber') == season_number]
+            
+            # 分析缺集
+            existing_episodes = set()
+            
+            for ep in season_episodes:
+                ep_number = ep.get('IndexNumber')
+                if ep_number is not None:
+                    existing_episodes.add(ep_number)
+                    season_info.episodes.append(EpisodeInfo(
+                        episode_number=ep_number,
+                        episode_id=ep.get('Id', ''),
+                        episode_name=ep.get('Name', f'Episode {ep_number}'),
+                        air_date=ep.get('PremiereDate', ''),
+                        has_media=ep.get('HasMedia', True)
+                    ))
+            
+            # 找出缺失的集
+            if season_info.expected_episodes > 0:
+                # 使用 TMDB 预期集数
+                expected_eps = set(expected_episodes_map.get(season_number, []))
+                for ep_num in expected_eps:
+                    if ep_num not in existing_episodes:
+                        season_info.missing_episodes.append(ep_num)
+            else:
+                # 基于现有集数估算
+                if existing_episodes:
+                    max_ep = max(existing_episodes)
+                    for i in range(1, max_ep + 1):
+                        if i not in existing_episodes:
+                            season_info.missing_episodes.append(i)
+            
+            return season_info
+            
+        except Exception as e:
+            logger.error(f"分析季失败 {season.get('Name')}: {e}")
+            return None
+    
     def _analyze_season(self, season: Dict, emby_client, series_id: str, expected_episodes_map: Dict) -> Optional[SeasonInfo]:
-        """分析某一季"""
+        """分析某一季（旧方法，保留兼容）"""
         try:
             season_number = season.get('IndexNumber', 0)
             # 跳过特别季

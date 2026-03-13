@@ -987,16 +987,32 @@
 
         async function saveConfig(e) {
             e.preventDefault();
+            
+            const embyHost = document.getElementById('embyHost').value.trim();
+            const embyApiKey = document.getElementById('embyApiKey').value.trim();
+            
+            if (!embyHost || !embyApiKey) {
+                alert('Emby 配置不能为空！\n请填写服务器地址和 API 密钥');
+                return;
+            }
+            
+            // 后端期望扁平结构：host, api_key, moviepilot
             const config = {
-                emby: {
-                    host: document.getElementById('embyHost').value,
-                    api_key: document.getElementById('embyApiKey').value
-                },
+                host: embyHost,
+                api_key: embyApiKey,
                 moviepilot: {
-                    host: document.getElementById('mpHost').value,
-                    username: document.getElementById('mpUsername').value,
-                    password: document.getElementById('mpPassword').value,
-                    enabled: true
+                    host: document.getElementById('mpHost').value.trim(),
+                    username: document.getElementById('mpUsername').value.trim(),
+                    password: document.getElementById('mpPassword').value.trim(),
+                    enabled: true,
+                    auto_download: true
+                },
+                libraries: {
+                    enabled: false,
+                    selected_ids: []
+                },
+                detection: {
+                    interval_minutes: 60
                 }
             };
 
@@ -1008,10 +1024,10 @@
                 });
 
                 const data = await response.json();
-                if (data.status === 'success') {
-                    alert('配置已保存！');
+                if (data.status === 'success' || response.ok) {
+                    alert('✅ 配置已保存！\n\nEmby: ' + embyHost + '\nMoviePilot: ' + config.moviepilot.host);
                 } else {
-                    alert('保存失败：' + (data.message || data.detail || '未知错误'));
+                    alert('保存失败：' + (data.detail || data.message || '未知错误'));
                 }
             } catch (error) {
                 alert('保存失败：' + error.message);

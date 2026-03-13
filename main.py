@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Any
 from loguru import logger
 import uvicorn
@@ -72,7 +72,7 @@ class EmbyConfig(BaseModel):
 class LibraryConfig(BaseModel):
     """媒体库配置"""
     enabled: bool = False
-    selected_ids: List[str] = []
+    selected_ids: List[str] = Field(default_factory=list)
 
 
 class MoviePilotConfig(BaseModel):
@@ -297,22 +297,22 @@ async def run_detection():
         logger.info("开始手动检测...")
         
         # 在后台线程中运行检测，避免阻塞
-        import threading
         from concurrent.futures import ThreadPoolExecutor, TimeoutError
         
         def detect_task():
             return detector.detect(emby_client)
         
-        executor = ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(detect_task)
-        
-        try:
-            # 设置超时（10 分钟）
-            last_result = future.result(timeout=600)
-        except TimeoutError:
-            logger.error("检测超时（>10 分钟）")
-            future.cancel()
-            raise HTTPException(status_code=504, detail="检测超时，请减少媒体库数量后重试")
+        # 使用 with 语句确保 ThreadPoolExecutor 正确关闭
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(detect_task)
+            
+            try:
+                # 设置超时（10 分钟）
+                last_result = future.result(timeout=600)
+            except TimeoutError:
+                logger.error("检测超时（>10 分钟）")
+                future.cancel()
+                raise HTTPException(status_code=504, detail="检测超时，请减少媒体库数量后重试")
         
         # 保存到数据库
         if db:

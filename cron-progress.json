@@ -1,13 +1,18 @@
 {
-  "time": "2026-03-13 15:40:02",
+  "time": "2026-03-13 16:32:41",
   "date": "2026-03-13",
   "tasks": {
-    "done": 9,
-    "total": 5,
-    "progress": 180
+    "done": 16,
+    "in_progress": 7,
+    "pending": 18,
+    "total": 41,
+    "progress": 39
   },
   "git": {
-    "commits": 24
+    "commits": 25,
+    "latest": "eae99b0"
   },
-  "service": "未知"
+  "service": {
+    "status": "未知"
+  }
 }

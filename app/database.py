@@ -31,9 +31,8 @@ class Database:
     def _ensure_directory(self):
         """确保数据库目录存在"""
         db_dir = os.path.dirname(self.db_path)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-            logger.info(f"创建数据库目录：{db_dir}")
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
     
     @contextmanager
     def get_connection(self):
@@ -76,7 +75,7 @@ class Database:
                     year TEXT DEFAULT '',
                     status TEXT DEFAULT 'ongoing',
                     detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (detection_id) REFERENCES detection_history(id)
+                    FOREIGN KEY (detection_id) REFERENCES detection_history(id) ON DELETE CASCADE
                 )
             ''')
             
@@ -117,6 +116,12 @@ class Database:
             ''')
             
             # 创建索引
+            # 设置 WAL 模式和并发优化
+            cursor.execute('PRAGMA journal_mode=WAL')
+            cursor.execute('PRAGMA synchronous=NORMAL')
+            cursor.execute('PRAGMA busy_timeout=5000')
+            cursor.execute('PRAGMA foreign_keys=ON')
+            
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_detection_time ON detection_history(detection_time)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_series_id ON missing_episodes(series_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_detected_at ON missing_episodes(detected_at)')

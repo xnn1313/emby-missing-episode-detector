@@ -5,6 +5,7 @@ SQLite 存储检测结果和历史记录
 
 import os
 import sqlite3
+from sqlite3 import PARSE_DECLTYPES, PARSE_COLNAMES
 import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
@@ -41,7 +42,7 @@ class Database:
     @contextmanager
     def get_connection(self):
         """获取数据库连接上下文管理器（启用类型解析和 WAL 模式）"""
-        conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES|PARSE_COLNAMES)
+        conn = sqlite3.connect(self.db_path, detect_types=PARSE_DECLTYPES|PARSE_COLNAMES)
         conn.row_factory = sqlite3.Row
         # 设置 WAL 模式和并发优化
         cursor = conn.cursor()

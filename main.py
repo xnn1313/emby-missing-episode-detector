@@ -480,31 +480,33 @@ async def push_download(request: DownloadRequest):
             if result.get('data') and result['data'].get('id'):
                 subscribe_id = result['data'].get('id')
         
-        if subscribe_id or (result and result.get('success')):
-            # 保存下载历史
-            subscribe_id = result.get('id') or result['data'].get('id')
-            
-            # 确保数据库已初始化
-            if db is None:
-                from app.database import get_database
-                db = get_database()
-            
-            record_id = db.save_download_history(
-                series_id=request.series_id,
-                series_name=request.series_name,
-                season_number=request.season,
-                episode_numbers=request.episodes,
-                moviepilot_task_id=str(result.get('id'))
-            )
-            
+        # 确保数据库已初始化
+        if db is None:
+            from app.database import get_database
+            db = get_database()
+        
+        # 无论成功失败都保存记录（用于前端显示状态）
+        subscribe_id = result.get('id') if result else None
+        status = 'completed' if (subscribe_id or (result and result.get('success'))) else 'failed'
+        
+        record_id = db.save_download_history(
+            series_id=request.series_id,
+            series_name=request.series_name,
+            season_number=request.season,
+            episode_numbers=request.episodes,
+            moviepilot_task_id=str(subscribe_id) if subscribe_id else None
+        )
+        
+        if status == 'completed':
             return {
                 "status": "success",
                 "message": f"已推送 {request.series_name} S{request.season} 到 MoviePilot",
-                "subscribe_id": result.get('id'),
+                "subscribe_id": subscribe_id,
                 "record_id": record_id
             }
         else:
-            raise HTTPException(status_code=500, detail="MoviePilot 订阅失败")
+            # 保存了失败记录，但返回错误
+            raise HTTPException(status_code=500, detail="MoviePilot 订阅失败，但已记录尝试")
             
     except Exception as e:
         logger.error(f"推送下载失败：{e}")

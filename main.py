@@ -458,6 +458,16 @@ async def push_download(request: DownloadRequest):
     if not mp_config.get('enabled') or not mp_config.get('host'):
         raise HTTPException(status_code=400, detail="MoviePilot 未配置")
     
+    # 确保数据库已初始化（移到 try 块之前）
+    if db is None:
+        from app.database import get_database
+        db = get_database()
+        logger.info("初始化数据库实例")
+    
+    # 调用 MoviePilot API
+    api_success = False
+    subscribe_id = None
+    
     try:
         # 初始化 MoviePilot 客户端（每次重新获取 token）
         from app.moviepilot_client import MoviePilotClient
@@ -474,48 +484,39 @@ async def push_download(request: DownloadRequest):
         )
         
         # MoviePilot 返回格式：{"success":true,"data":{"id":110}}
-        subscribe_id = None
         if result:
             subscribe_id = result.get('id')
             if result.get('data') and result['data'].get('id'):
                 subscribe_id = result['data'].get('id')
-        
-        # 确保数据库已初始化
-        if db is None:
-            from app.database import get_database
-            db = get_database()
-            logger.info("初始化数据库实例")
-        
-        logger.info(f"保存下载记录：series_id={request.series_id}, season={request.season}, db={db}")
-        
-        # 无论成功失败都保存记录（用于前端显示状态）
-        subscribe_id = result.get('id') if result else None
-        status = 'completed' if (subscribe_id or (result and result.get('success'))) else 'failed'
-        
-        record_id = db.save_download_history(
-            series_id=request.series_id,
-            series_name=request.series_name,
-            season_number=request.season,
-            episode_numbers=request.episodes,
-            moviepilot_task_id=str(subscribe_id) if subscribe_id else None
-        )
-        
-        logger.info(f"下载记录已保存：record_id={record_id}")
-        
-        if status == 'completed':
-            return {
-                "status": "success",
-                "message": f"已推送 {request.series_name} S{request.season} 到 MoviePilot",
-                "subscribe_id": subscribe_id,
-                "record_id": record_id
-            }
-        else:
-            # 保存了失败记录，但返回错误
-            raise HTTPException(status_code=500, detail="MoviePilot 订阅失败，但已记录尝试")
+            api_success = result.get('success', False)
             
     except Exception as e:
-        logger.error(f"推送下载失败：{e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"MoviePilot API 调用失败：{e}")
+        api_success = False
+    
+    # 无论 API 成功失败都保存记录（用于前端显示状态）- 移到 try 块之外
+    status = 'completed' if (subscribe_id or api_success) else 'failed'
+    
+    record_id = db.save_download_history(
+        series_id=request.series_id,
+        series_name=request.series_name,
+        season_number=request.season,
+        episode_numbers=request.episodes,
+        moviepilot_task_id=str(subscribe_id) if subscribe_id else None
+    )
+    
+    logger.info(f"下载记录已保存：record_id={record_id}, status={status}")
+    
+    if status == 'completed':
+        return {
+            "status": "success",
+            "message": f"已推送 {request.series_name} S{request.season} 到 MoviePilot",
+            "subscribe_id": subscribe_id,
+            "record_id": record_id
+        }
+    else:
+        # 保存了失败记录，但返回错误
+        raise HTTPException(status_code=500, detail="MoviePilot 订阅失败")
 
 
 @app.get("/api/download/history")

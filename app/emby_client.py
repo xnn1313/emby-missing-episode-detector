@@ -176,6 +176,7 @@ class EmbyClient:
     def get_episodes_batch(self, series_ids: List[str]) -> Dict[str, List[Dict]]:
         """
         批量获取多个剧集的所有集（优化性能）
+        注意：Emby API 不支持直接按 SeriesId 列表过滤，需要分批次获取
         
         Args:
             series_ids: 剧集 ID 列表
@@ -186,17 +187,32 @@ class EmbyClient:
         all_episodes = {}
         
         try:
-            # 一次性获取所有剧集的所有集
-            params = {
-                'IncludeItemTypes': 'Episode',
-                'Recursive': True,
-                'Fields': 'Overview,AirTime,ProductionYear,PremiereDate,HasMedia',
-                'IsMissing': 'False'
-            }
-            response = self.client.get('/Items', params=params)
-            if response.status_code == 200:
+            # 方案：先获取所有 Episode，然后在内存中过滤
+            # 使用分页避免单次请求数据过大
+            page_size = 5000
+            start_index = 0
+            total_fetched = 0
+            
+            while True:
+                params = {
+                    'IncludeItemTypes': 'Episode',
+                    'Recursive': True,
+                    'Fields': 'IndexNumber,ParentIndexNumber,SeriesId,Name,PremiereDate',
+                    'IsMissing': 'False',
+                    'StartIndex': start_index,
+                    'Limit': page_size
+                }
+                response = self.client.get('/Items', params=params)
+                if response.status_code != 200:
+                    logger.warning(f"分页获取集失败：{response.status_code}")
+                    break
+                    
                 data = response.json()
                 episodes = data.get('Items', [])
+                total_items = data.get('TotalRecordCount', 0)
+                
+                if not episodes:
+                    break
                 
                 # 按剧集 ID 分组
                 for ep in episodes:
@@ -206,9 +222,17 @@ class EmbyClient:
                             all_episodes[series_id] = []
                         all_episodes[series_id].append(ep)
                 
-                logger.info(f"批量获取到 {len(episodes)} 集，属于 {len(all_episodes)} 个剧集")
-            else:
-                logger.warning(f"批量获取集信息失败：{response.status_code}")
+                total_fetched += len(episodes)
+                start_index += page_size
+                
+                logger.debug(f"已获取 {total_fetched}/{total_items} 集，{len(all_episodes)} 个剧集有数据")
+                
+                # 如果已经获取完所有数据
+                if start_index >= total_items:
+                    break
+            
+            logger.info(f"批量获取完成：{total_fetched} 集，{len(all_episodes)}/{len(series_ids)} 个剧集有数据")
+            
         except Exception as e:
             logger.error(f"批量获取集信息失败：{e}")
         

@@ -103,18 +103,22 @@ class MissingEpisodeDetector:
         result.total_series = len(tv_shows)
         logger.info(f"发现 {len(tv_shows)} 个剧集")
         
-        # 批量获取所有集（性能优化：避免每个剧集单独调用 API）
-        series_ids = [show.get('Id') for show in tv_shows]
-        episodes_by_series = emby_client.get_episodes_batch(series_ids)
-        logger.info(f"批量获取完成，{len(episodes_by_series)} 个剧集有集数据")
-        
+        # 按剧集逐个分析（Emby 数据量大时批量获取不可行）
+        # 优化：使用 _analyze_series 直接调用 API，但只获取必要字段
+        logger.info(f"开始逐个分析 {len(tv_shows)} 个剧集...")
+        processed = 0
         for show in tv_shows:
-            series_info = self._analyze_series_optimized(show, emby_client, episodes_by_series)
+            series_info = self._analyze_series(show, emby_client)
+            processed += 1
+            if processed % 500 == 0:
+                logger.info(f"已处理 {processed}/{len(tv_shows)} 个剧集")
             if series_info:
                 result.series.append(series_info)
                 if series_info.missing_episodes_count > 0:
                     result.series_with_missing += 1
                     result.total_missing_episodes += series_info.missing_episodes_count
+        
+        logger.info(f"剧集分析完成：{processed} 个")
         
         result.detection_time = datetime.now()
         result.duration_seconds = time.time() - start_time

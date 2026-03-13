@@ -8,31 +8,22 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_DIR = Path('/root/.openclaw/workspace/emby-missing-episode-detector')
-TASKS_FILES = [
-    PROJECT_DIR / 'TASKS.md',
-    PROJECT_DIR / 'TASKS-UI-FIX.md',
-    PROJECT_DIR / 'TASKS-UI-FIX2.md',
-    PROJECT_DIR / 'CODEX_ANALYSIS.md'
-]
+CODEX_FILE = PROJECT_DIR / 'CODEX_ANALYSIS.md'
 CRON_FILE = PROJECT_DIR / 'cron-progress.json'
 
 now = datetime.now()
 time_str = now.strftime('%Y-%m-%d %H:%M:%S')
 date_str = now.strftime('%Y-%m-%d')
 
-# 读取所有任务文件
+# 读取 Codex 分析报告
 done = 0
-in_progress = 0
-pending = 0
+total = 34  # Codex 发现的总问题数
 
-for f in TASKS_FILES:
-    if f.exists():
-        content = f.read_text()
-        done += content.count('✅')
-        in_progress += content.count('🔄')
-        pending += content.count('⏳')
+if CODEX_FILE.exists():
+    content = CODEX_FILE.read_text()
+    # 统计已修复的问题（✅ 标记）
+    done = content.count('✅')
 
-total = done + in_progress + pending
 progress = (done * 100 // total) if total > 0 else 0
 
 # Git 信息
@@ -56,10 +47,8 @@ except:
 data = {
     'time': time_str,
     'date': date_str,
-    'tasks': {
+    'codex_analysis': {
         'done': done,
-        'in_progress': in_progress,
-        'pending': pending,
         'total': total,
         'progress': progress
     },
@@ -68,5 +57,5 @@ data = {
 }
 CRON_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
-print(f'[{time_str}] 📊 {done}/{total} ({progress}%) | Git: {git_count} | 服务：{service}')
+print(f'[{time_str}] 📊 Codex 修复：{done}/{total} ({progress}%) | Git: {git_count} | 服务：{service}')
 PYTHON

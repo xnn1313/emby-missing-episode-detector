@@ -16,17 +16,21 @@ from contextlib import contextmanager
 class Database:
     """SQLite 数据库管理类"""
     
-    def __init__(self, db_path: str = "data/emby_detector.db"):
+    def __init__(self, db_path: Optional[str] = None):
         """
         初始化数据库
         
         Args:
-            db_path: 数据库文件路径
+            db_path: 数据库文件路径（默认使用项目根目录的 data/emby_detector.db）
         """
-        self.db_path = db_path
+        if db_path is None:
+            # 使用项目根目录的绝对路径
+            self.db_path = str(project_root / "data" / "emby_detector.db")
+        else:
+            self.db_path = db_path
         self._ensure_directory()
         self._init_schema()
-        logger.info(f"数据库已初始化：{db_path}")
+        logger.info(f"数据库已初始化：{self.db_path}")
     
     def _ensure_directory(self):
         """确保数据库目录存在"""
@@ -36,9 +40,15 @@ class Database:
     
     @contextmanager
     def get_connection(self):
-        """获取数据库连接上下文管理器"""
-        conn = sqlite3.connect(self.db_path)
+        """获取数据库连接上下文管理器（启用类型解析和 WAL 模式）"""
+        conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES|PARSE_COLNAMES)
         conn.row_factory = sqlite3.Row
+        # 设置 WAL 模式和并发优化
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL')
+        cursor.execute('PRAGMA synchronous=NORMAL')
+        cursor.execute('PRAGMA busy_timeout=5000')
+        cursor.execute('PRAGMA foreign_keys=ON')
         try:
             yield conn
         finally:

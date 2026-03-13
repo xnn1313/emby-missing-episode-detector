@@ -6,6 +6,7 @@
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from loguru import logger
 
 try:
@@ -37,6 +38,11 @@ class SeasonInfo:
     expected_episodes: int = 0
 
 
+class SeriesStatus(str, Enum):
+    """剧集状态枚举"""
+    ONGOING = "ongoing"
+    ENDED = "ended"
+
 @dataclass
 class SeriesInfo:
     """剧集信息"""
@@ -48,7 +54,7 @@ class SeriesInfo:
     total_seasons: int = 0
     total_episodes: int = 0
     missing_episodes_count: int = 0
-    status: str = "ongoing"  # ongoing, ended
+    status: SeriesStatus = SeriesStatus.ONGOING
     poster_url: Optional[str] = None
     year: Optional[str] = None
 

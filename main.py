@@ -243,17 +243,6 @@ async def set_config(config: FullConfig):
         if config.detection_interval:
             config_manager.set_detection_interval(config.detection_interval)
         
-        # 设置 MoviePilot 配置
-        if config.moviepilot:
-            config_manager.set_moviepilot_config(
-                host=config.moviepilot.host,
-                username=config.moviepilot.username or "admin",
-                password=config.moviepilot.password or "",
-                enabled=config.moviepilot.enabled,
-                auto_download=config.moviepilot.auto_download,
-                download_path=config.moviepilot.download_path or ""
-            )
-        
         # 初始化其他组件
         if emby_client:
             # 获取媒体库配置

@@ -1559,21 +1559,28 @@
                 
                 if (!tmdbData.tmdb_id) {
                     document.getElementById('hdhiveResult').innerHTML = `
-                        <p style="color:#f87171;">无法获取 TMDB ID</p>
-                        <p style="color:#888;font-size:12px;">提示：请确保剧集在 Emby 中正确刮削</p>
+                        <p style="color:#fbbf24;">⚠️ 无法获取 TMDB ID</p>
+                        <p style="color:#888;font-size:13px;">该剧可能在 Emby 中未正确刮削元数据</p>
                         <button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="document.getElementById('hdhiveModal').remove()">关闭</button>
                     `;
                     return;
                 }
                 
-                document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在搜索资源... (TMDB: ${tmdbData.tmdb_id})`;
+                document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在搜索 HDHive 资源... (TMDB: ${tmdbData.tmdb_id})`;
                 
                 // 搜索 HDHive 资源
                 const searchRes = await fetch(`/api/hdhive/search?tmdb_id=${tmdbData.tmdb_id}`);
                 const searchData = await searchRes.json();
                 
                 if (searchData.status !== 'success' || !searchData.resources?.length) {
-                    document.getElementById('hdhiveResult').innerHTML = '<p style="color:#f87171;">未找到相关资源</p>';
+                    document.getElementById('hdhiveResult').innerHTML = `
+                        <p style="color:#fbbf24;">📭 HDHive 暂无此剧资源</p>
+                        <p style="color:#888;font-size:13px;">TMDB ID: ${tmdbData.tmdb_id}</p>
+                        <p style="color:#888;font-size:12px;">提示：HDHive 主要收录热门剧集，部分剧集可能没有资源</p>
+                        <button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="document.getElementById('hdhiveModal').remove()">关闭</button>
+                    `;
+                    return;
+                }
                     return;
                 }
                 

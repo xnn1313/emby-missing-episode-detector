@@ -31,7 +31,7 @@ class EmbyClient:
                 'X-Emby-Token': api_key,
                 'Content-Type': 'application/json'
             },
-            timeout=httpx.Timeout(connect=5.0, read=30.0, write=30.0)
+            timeout=httpx.Timeout(timeout=30.0, connect=5.0, read=30.0, write=30.0)
         )
         logger.info(f"Emby 客户端已初始化：{self.host}")
     
@@ -296,6 +296,47 @@ class EmbyClient:
             return None
         except Exception as e:
             logger.error(f"获取项目详情失败 {item_id}: {e}")
+            return None
+    
+    def get_tmdb_id(self, item_id: str) -> Optional[str]:
+        """
+        获取剧集的 TMDB ID
+        
+        Args:
+            item_id: Emby 项目 ID
+            
+        Returns:
+            TMDB ID 或 None
+        """
+        try:
+            item = self.get_item(item_id)
+            if not item:
+                return None
+            
+            # 从 ProviderIds 字段获取
+            provider_ids = item.get('ProviderIds', {})
+            tmdb_id = provider_ids.get('Tmdb') or provider_ids.get('TMDB')
+            
+            if tmdb_id:
+                logger.debug(f"获取 TMDB ID: {item_id} -> {tmdb_id}")
+                return tmdb_id
+            
+            # 尝试从 ExternalUrls 获取
+            external_urls = item.get('ExternalUrls', [])
+            for url in external_urls:
+                if 'themoviedb' in url.get('Url', '').lower():
+                    # 从 URL 中提取 ID
+                    url_parts = url.get('Url', '').split('/')
+                    for part in reversed(url_parts):
+                        if part.isdigit():
+                            logger.debug(f"从 ExternalUrls 获取 TMDB ID: {item_id} -> {part}")
+                            return part
+            
+            logger.warning(f"未找到 TMDB ID: {item_id}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"获取 TMDB ID 失败 {item_id}: {e}")
             return None
     
     def close(self):

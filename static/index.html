@@ -672,10 +672,72 @@
                         <label>MoviePilot 密码</label>
                         <input type="password" id="mpPassword" class="filter-select" style="width: 100%;">
                     </div>
-                    <button type="submit" class="btn btn-primary" style="margin-top: 20px;">
-                        <i class="fas fa-save"></i>
-                        保存配置
-                    </button>
+                    
+                    <hr style="margin: 20px 0; border-color: #444;">
+                    <h3 style="color: #667eea; margin-bottom: 15px;"><i class="fas fa-hive"></i> HDHive 配置</h3>
+                    
+                    <div class="form-group">
+                        <label>HDHive API Key</label>
+                        <input type="password" id="hdhiveApiKey" class="filter-select" style="width: 100%;" placeholder="在 HDHive 设置中获取 API Key">
+                    </div>
+                    <div class="form-group">
+                        <label>API 地址</label>
+                        <input type="text" id="hdhiveBaseUrl" class="filter-select" style="width: 100%;" value="https://hdhive.com/api/open" placeholder="https://hdhive.com/api/open">
+                    </div>
+                    
+                    <details style="margin-bottom: 15px;">
+                        <summary style="cursor: pointer; color: #888;">代理设置（可选）</summary>
+                        <div style="margin-top: 10px; padding: 10px; background: #1a1a2e; border-radius: 8px;">
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="hdhiveProxyEnabled" style="width: auto;">
+                                    启用代理
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>代理地址</label>
+                                <input type="text" id="hdhiveProxyHost" class="filter-select" style="width: 100%;" placeholder="127.0.0.1">
+                            </div>
+                            <div class="form-group">
+                                <label>代理端口</label>
+                                <input type="number" id="hdhiveProxyPort" class="filter-select" style="width: 100%;" placeholder="7890">
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label>用户名（可选）</label>
+                                    <input type="text" id="hdhiveProxyUser" class="filter-select" style="width: 100%;">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label>密码（可选）</label>
+                                    <input type="password" id="hdhiveProxyPass" class="filter-select" style="width: 100%;">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                    
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="hdhiveEnabled" style="width: auto;">
+                            启用 HDHive 资源查询
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>最大积分解锁</label>
+                        <input type="number" id="hdhiveMaxPoints" class="filter-select" style="width: 100%;" value="50" min="0" max="1000">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">
+                            <i class="fas fa-save"></i>
+                            保存配置
+                        </button>
+                        <button type="button" class="btn btn-outline" onclick="testHdhiveConnection()" style="flex: 1;">
+                            <i class="fas fa-plug"></i>
+                            测试连接
+                        </button>
+                    </div>
+                    
+                    <div id="hdhiveStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
                 </form>
             </div>
         </div>
@@ -713,7 +775,14 @@
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             
             document.getElementById('page-' + pageId).classList.add('active');
-            event.currentTarget.classList.add('active');
+            
+            // 通过 pageId 找到对应的导航项并添加 active 类
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                if (item.getAttribute('onclick') && item.getAttribute('onclick').includes("showPage('" + pageId + "')")) {
+                    item.classList.add('active');
+                }
+            });
 
             // 移动端关闭侧边栏
             document.getElementById('sidebar').classList.remove('open');
@@ -907,49 +976,47 @@
                                         <i class="fas fa-check-circle"></i>
                                         已推送
                                        </button>`
-                                    : `<button class="btn btn-primary" onclick="pushDownload('${card.series_id || ''}', '${(card.series_name || '').replace(/'/g, "\\'")}', ${card.season || 1})">
-                                        <i class="fas fa-download"></i>
-                                        推送下载
-                                       </button>`
+                                    : `<div style="display:flex;gap:8px;">
+                                        <button class="btn btn-primary download-btn" style="flex:1;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-season="${card.season || 1}">
+                                            <i class="fas fa-download"></i>
+                                            推送下载
+                                        </button>
+                                        <button class="btn btn-outline hdhive-btn" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" title="查询 HDHive 资源">
+                                            <i class="fas fa-hive"></i>
+                                        </button>
+                                    </div>`
                             }
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
             
             if (append) {
                 container.insertAdjacentHTML('beforeend', html);
             } else {
                 container.innerHTML = html;
             }
-            
-            // 添加加载更多提示
-            if (hasMore && !isLoading) {
-                const loader = document.createElement('div');
-                loader.id = 'loadMoreTrigger';
-                loader.className = 'loading';
-                loader.innerHTML = '<i class="fas fa-spinner"></i><p>加载更多...</p>';
-                loader.style.display = 'none';
-                container.parentNode.appendChild(loader);
-            }
         }
         
-        // 无限滚动加载
+        // 无限滚动加载 - 使用 window.onscroll 更可靠
         function setupInfiniteScroll() {
-            const trigger = document.getElementById('loadMoreTrigger');
-            if (!trigger) return;
+            // 移除旧的监听器
+            window.onscroll = null;
             
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting && !isLoading && hasMore) {
+            window.onscroll = function() {
+                // 检测是否滚动到页面底部附近（距离底部 300px 内）
+                const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+                const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight || window.innerHeight;
+                
+                if (scrollTop + clientHeight >= scrollHeight - 300) {
+                    if (!isLoading && hasMore) {
+                        console.log('触发加载更多');
                         loadMoreCards();
                     }
-                });
-            }, {
-                rootMargin: '100px' // 提前 100px 加载
-            });
-            
-            observer.observe(trigger);
+                }
+            };
         }
         
         async function loadMoreCards() {
@@ -958,36 +1025,90 @@
             isLoading = true;
             currentPage++;
             
-            const trigger = document.getElementById('loadMoreTrigger');
-            if (trigger) {
-                trigger.style.display = 'block';
-            }
+            // 显示加载提示
+            const grid = document.getElementById('seriesGrid');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loadingMore';
+            loadingDiv.className = 'loading';
+            loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i><p>加载中...</p>';
+            grid.appendChild(loadingDiv);
             
             try {
                 const response = await fetch(`/api/cards?page=${currentPage}&page_size=${pageSize}`);
                 const data = await response.json();
+                
+                // 移除加载提示
+                loadingDiv.remove();
                 
                 if (data.status === 'success' && data.cards && data.cards.length > 0) {
                     const pagination = data.pagination || {};
                     allCards = [...allCards, ...data.cards];
                     hasMore = pagination.has_more || false;
                     
-                    renderCards(data.cards, document.getElementById('seriesGrid'), true);
+                    // 渲染新卡片（追加模式）
+                    const html = data.cards.map(card => {
+                        const missingEps = Array.isArray(card.missing_episodes) ? card.missing_episodes : [];
+                        const hasMissing = missingEps.length > 0;
+                        const posterUrl = card.poster_url || card.poster || '';
+                        const isDownloaded = downloadedHistory.some(h => 
+                            h.series_id === card.series_id && h.season_number === card.season
+                        );
+                        
+                        return `
+                        <div class="series-card" data-name="${card.series_name || ''}" data-year="${card.year || ''}" data-missing="${missingEps.length}">
+                            <div class="series-card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                ${posterUrl 
+                                    ? `<img src="${posterUrl}" alt="${card.series_name}" crossorigin="anonymous" onerror="this.style.display='none'">`
+                                    : '<div class="placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;"><i class="fas fa-tv" style="font-size:64px; opacity:0.5;"></i></div>'}
+                                <div class="series-card-badge ${hasMissing ? 'missing' : 'complete'}">
+                                    ${hasMissing ? '缺集' : '完整'}
+                                </div>
+                            </div>
+                            <div class="series-card-body">
+                                <h3 class="series-card-title">${card.series_name || '未知剧集'}</h3>
+                                <div class="series-card-meta">
+                                    <span><i class="fas fa-calendar"></i> ${card.year || '未知'}</span>
+                                    <span><i class="fas fa-layer-group"></i> 第${card.season || 1}季</span>
+                                </div>
+                                <div class="series-card-tags">
+                                    <span class="tag season">S${card.season || 1}</span>
+                                    ${hasMissing ? `<span class="tag missing">缺失 ${missingEps.length} 集</span>` : ''}
+                                </div>
+                                ${hasMissing ? `
+                                    <div class="series-card-missing">
+                                        <div class="series-card-missing-title"><i class="fas fa-exclamation-triangle"></i> 缺失剧集</div>
+                                        <div class="missing-episodes">
+                                            ${missingEps.slice(0, 10).map(ep => `<span class="missing-ep">E${ep}</span>`).join('')}
+                                            ${missingEps.length > 10 ? `<span class="missing-ep">+${missingEps.length - 10}</span>` : ''}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                <div class="series-card-actions">
+                                    ${!hasMissing
+                                        ? '<button class="btn btn-outline" disabled style="width:100%;"><i class="fas fa-check"></i> 已完整</button>'
+                                        : isDownloaded
+                                            ? '<button class="btn btn-outline" disabled style="width:100%;"><i class="fas fa-check-circle"></i> 已推送</button>'
+                                            : `<button class="btn btn-primary download-btn" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-season="${card.season || 1}"><i class="fas fa-download"></i> 推送下载</button>`
+                                    }
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
                     
-                    if (!hasMore && trigger) {
-                        trigger.innerHTML = '<p>已经到底啦~</p>';
-                        setTimeout(() => trigger.remove(), 2000);
+                    grid.insertAdjacentHTML('beforeend', html);
+                    
+                    if (!hasMore) {
+                        const endDiv = document.createElement('div');
+                        endDiv.className = 'loading';
+                        endDiv.innerHTML = '<p>已经到底啦~</p>';
+                        grid.appendChild(endDiv);
                     }
                 } else {
                     hasMore = false;
-                    if (trigger) trigger.remove();
                 }
             } catch (error) {
                 console.error('加载更多失败:', error);
-                if (trigger) {
-                    trigger.innerHTML = '<p>加载失败，点击重试</p>';
-                    trigger.onclick = () => loadMoreCards();
-                }
+                loadingDiv.innerHTML = '<p>加载失败</p>';
             } finally {
                 isLoading = false;
             }
@@ -1034,7 +1155,6 @@
 
         // ========== API 调用 ==========
         async function runDetection() {
-            const btn = event.currentTarget;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检测中...';
 
@@ -1056,14 +1176,13 @@
             }
         }
 
-        async function pushDownload(seriesId, seriesName, season) {
+        async function pushDownload(seriesId, seriesName, season, btn) {
             console.log('推送下载:', { seriesId, seriesName, season });
             
             // 从卡片数据属性获取缺集信息
-            const card = event.currentTarget.closest('.series-card');
             
             // 尝试从全局数据获取缺集
-            const cardData = currentData.find(c => c.series_id === seriesId && c.season === season);
+            const cardData = allCards.find(c => c.series_id === seriesId && c.season === season);
             const missingEps = cardData && cardData.missing_episodes ? cardData.missing_episodes : [];
             
             console.log('缺失集数:', missingEps);
@@ -1073,7 +1192,6 @@
                 return;
             }
 
-            const btn = event.currentTarget;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 推送中...';
 
@@ -1179,6 +1297,23 @@
                     document.getElementById('embyApiKey').value = data.config.emby?.api_key || '';
                     document.getElementById('mpHost').value = data.config.moviepilot?.host || '';
                     document.getElementById('mpUsername').value = data.config.moviepilot?.username || 'admin';
+                    document.getElementById('mpPassword').value = data.config.moviepilot?.password || '';
+                }
+                
+                // 加载 HDHive 配置
+                const hdhiveRes = await fetch('/api/hdhive/config');
+                const hdhiveData = await hdhiveRes.json();
+                if (hdhiveData.status === 'success') {
+                    const hc = hdhiveData.config;
+                    document.getElementById('hdhiveApiKey').value = hc.api_key || '';
+                    document.getElementById('hdhiveBaseUrl').value = hc.base_url || 'https://hdhive.com/api/open';
+                    document.getElementById('hdhiveEnabled').checked = hc.enabled || false;
+                    document.getElementById('hdhiveProxyEnabled').checked = hc.proxy?.enabled || false;
+                    document.getElementById('hdhiveProxyHost').value = hc.proxy?.host || '';
+                    document.getElementById('hdhiveProxyPort').value = hc.proxy?.port || '';
+                    document.getElementById('hdhiveProxyUser').value = hc.proxy?.username || '';
+                    document.getElementById('hdhiveProxyPass').value = '';
+                    document.getElementById('hdhiveMaxPoints').value = hc.settings?.max_points_per_unlock || 50;
                 }
             } catch (error) {
                 console.error('加载配置失败:', error);
@@ -1224,6 +1359,32 @@
                 });
 
                 const data = await response.json();
+                
+                // 保存 HDHive 配置
+                const hdhiveConfig = {
+                    api_key: document.getElementById('hdhiveApiKey').value.trim(),
+                    base_url: document.getElementById('hdhiveBaseUrl').value.trim() || 'https://hdhive.com/api/open',
+                    enabled: document.getElementById('hdhiveEnabled').checked,
+                    proxy: {
+                        enabled: document.getElementById('hdhiveProxyEnabled').checked,
+                        host: document.getElementById('hdhiveProxyHost').value.trim(),
+                        port: parseInt(document.getElementById('hdhiveProxyPort').value) || 0,
+                        username: document.getElementById('hdhiveProxyUser').value.trim(),
+                        password: document.getElementById('hdhiveProxyPass').value.trim()
+                    },
+                    settings: {
+                        max_points_per_unlock: parseInt(document.getElementById('hdhiveMaxPoints').value) || 50,
+                        prefer_115: true,
+                        auto_unlock: false
+                    }
+                };
+                
+                await fetch('/api/hdhive/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(hdhiveConfig)
+                });
+                
                 if (data.status === 'success' || response.ok) {
                     alert('✅ 配置已保存！\n\nEmby: ' + embyHost + '\nMoviePilot: ' + config.moviepilot.host);
                 } else {
@@ -1231,6 +1392,34 @@
                 }
             } catch (error) {
                 alert('保存失败：' + error.message);
+            }
+        }
+        
+        async function testHdhiveConnection() {
+            const statusDiv = document.getElementById('hdhiveStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#1a1a2e';
+            statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 测试连接中...';
+            
+            try {
+                const response = await fetch('/api/hdhive/status');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusDiv.style.background = '#1a3a1a';
+                    statusDiv.innerHTML = `
+                        <p style="color: #4ade80;"><i class="fas fa-check-circle"></i> 连接成功！</p>
+                        <p>用户: ${data.user?.nickname || '未知'}</p>
+                        <p>积分: ${data.user?.points || 0}</p>
+                        <p>VIP: ${data.user?.is_vip ? '是' : '否'}</p>
+                    `;
+                } else {
+                    statusDiv.style.background = '#3a1a1a';
+                    statusDiv.innerHTML = `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> ${data.message || '连接失败'}</p>`;
+                }
+            } catch (error) {
+                statusDiv.style.background = '#3a1a1a';
+                statusDiv.innerHTML = `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> 连接失败: ${error.message}</p>`;
             }
         }
 
@@ -1313,7 +1502,133 @@
 
             // 加载仪表盘
             loadDashboard();
+            
+            // 事件委托：处理下载按钮点击
+            document.getElementById('seriesGrid').addEventListener('click', function(e) {
+                const downloadBtn = e.target.closest('.download-btn');
+                if (downloadBtn) {
+                    e.preventDefault();
+                    const seriesId = downloadBtn.dataset.seriesId;
+                    const seriesName = downloadBtn.dataset.seriesName;
+                    const season = parseInt(downloadBtn.dataset.season) || 1;
+                    pushDownload(seriesId, seriesName, season, downloadBtn);
+                    return;
+                }
+                
+                const hdhiveBtn = e.target.closest('.hdhive-btn');
+                if (hdhiveBtn) {
+                    e.preventDefault();
+                    const seriesId = hdhiveBtn.dataset.seriesId;
+                    const seriesName = hdhiveBtn.dataset.seriesName;
+                    searchHdhive(seriesId, seriesName);
+                }
+            });
         });
+        
+        // HDHive 资源搜索
+        async function searchHdhive(seriesId, seriesName) {
+            // 先获取 TMDB ID
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'modal';
+            statusDiv.innerHTML = `
+                <div class="modal-content" style="background:#1a1a2e;padding:20px;border-radius:12px;max-width:600px;max-height:80vh;overflow-y:auto;">
+                    <h3 style="color:#667eea;margin-bottom:15px;"><i class="fas fa-hive"></i> 查询 HDHive 资源</h3>
+                    <p style="color:#888;">剧集: ${seriesName}</p>
+                    <div id="hdhiveResult" style="margin-top:15px;"><i class="fas fa-spinner fa-spin"></i> 正在获取 TMDB ID...</div>
+                </div>
+            `;
+            document.body.appendChild(statusDiv);
+            
+            try {
+                // 获取 TMDB ID
+                const tmdbRes = await fetch(`/api/tmdb/${seriesId}`);
+                const tmdbData = await tmdbRes.json();
+                
+                if (!tmdbData.tmdb_id) {
+                    document.getElementById('hdhiveResult').innerHTML = '<p style="color:#f87171;">无法获取 TMDB ID，请检查剧集刮削信息</p>';
+                    return;
+                }
+                
+                document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在搜索资源... (TMDB: ${tmdbData.tmdb_id})`;
+                
+                // 搜索 HDHive 资源
+                const searchRes = await fetch(`/api/hdhive/search?tmdb_id=${tmdbData.tmdb_id}`);
+                const searchData = await searchRes.json();
+                
+                if (searchData.status !== 'success' || !searchData.resources?.length) {
+                    document.getElementById('hdhiveResult').innerHTML = '<p style="color:#f87171;">未找到相关资源</p>';
+                    return;
+                }
+                
+                // 展示资源列表
+                let html = `<p style="color:#4ade80;margin-bottom:10px;">找到 ${searchData.total} 个资源</p>`;
+                html += '<div style="max-height:400px;overflow-y:auto;">';
+                
+                searchData.resources.forEach(r => {
+                    const is115 = r.title?.toLowerCase().includes('115') || r.title?.includes('115网盘');
+                    html += `
+                        <div style="background:#0a0a1a;padding:12px;border-radius:8px;margin-bottom:10px;cursor:pointer;" 
+                             onclick="unlockHdhiveResource('${r.slug}', '${r.title?.replace(/'/g, "\\'") || '未知'}', ${r.unlock_points}, this)">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <span style="font-weight:bold;color:#fff;">${r.title || '未知标题'}</span>
+                                ${is115 ? '<span style="background:#667eea;padding:2px 8px;border-radius:4px;font-size:12px;">115</span>' : ''}
+                            </div>
+                            <div style="display:flex;gap:15px;color:#888;font-size:13px;">
+                                <span><i class="fas fa-hdd"></i> ${r.share_size || '未知'}</span>
+                                <span><i class="fas fa-video"></i> ${(r.video_resolution || []).join(', ')}</span>
+                                <span style="color:${r.unlock_points === 0 ? '#4ade80' : '#fbbf24'};">
+                                    <i class="fas fa-coins"></i> ${r.unlock_points || 0} 积分
+                                </span>
+                            </div>
+                            ${r.is_unlocked ? '<div style="color:#4ade80;margin-top:5px;font-size:12px;"><i class="fas fa-check"></i> 已解锁</div>' : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                html += '<button class="btn btn-outline" style="margin-top:15px;width:100%;" onclick="this.closest(\'.modal\').remove()">关闭</button>';
+                
+                document.getElementById('hdhiveResult').innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('hdhiveResult').innerHTML = `<p style="color:#f87171;">查询失败: ${error.message}</p>`;
+            }
+        }
+        
+        async function unlockHdhiveResource(slug, title, points, elem) {
+            if (!confirm(`确定要解锁吗？\n\n资源: ${title}\n消耗积分: ${points}`)) {
+                return;
+            }
+            
+            elem.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 解锁中...';
+            
+            try {
+                const res = await fetch('/api/hdhive/unlock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slug })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    const url = data.data?.full_url || data.data?.url || '';
+                    const code = data.data?.access_code || '';
+                    elem.innerHTML = `
+                        <div style="color:#4ade80;">
+                            <p><i class="fas fa-check-circle"></i> 解锁成功！</p>
+                            <div style="background:#0a0a1a;padding:10px;border-radius:8px;margin-top:10px;word-break:break-all;">
+                                <p style="margin-bottom:5px;">链接: <a href="${url}" target="_blank" style="color:#667eea;">${url}</a></p>
+                                ${code ? `<p>访问码: <span style="color:#fbbf24;font-weight:bold;">${code}</span></p>` : ''}
+                            </div>
+                            <button class="btn btn-primary" style="margin-top:10px;" onclick="navigator.clipboard.writeText('${url} ${code}'.trim());alert('已复制！')">复制链接</button>
+                        </div>
+                    `;
+                } else {
+                    elem.innerHTML = `<p style="color:#f87171;">解锁失败: ${data.message || '未知错误'}</p>`;
+                }
+            } catch (error) {
+                elem.innerHTML = `<p style="color:#f87171;">解锁失败: ${error.message}</p>`;
+            }
+        }
     </script>
 </body>
 </html>

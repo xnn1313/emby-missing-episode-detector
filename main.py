@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from loguru import logger
 import uvicorn
 
@@ -48,6 +48,66 @@ app = FastAPI(
     version="0.1.0"
 )
 
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时自动加载配置并初始化客户端"""
+    global emby_client, detector, db, config_manager, moviepilot_client, hdhive_client, last_result
+    
+    try:
+        logger.info("正在启动服务...")
+        
+        # 初始化配置管理器
+        config_manager = get_config_manager()
+        config = config_manager.get_all_config()
+        
+        # 加载 Emby 配置
+        emby_config = config.get('emby', {})
+        if emby_config.get('host') and emby_config.get('api_key'):
+            emby_client = EmbyClient(emby_config['host'], emby_config['api_key'])
+            logger.info(f"Emby 客户端已初始化：{emby_config['host']}")
+            
+            # 初始化检测器
+            lib_config = config.get('libraries', {})
+            library_ids = lib_config.get('selected_ids', []) if lib_config.get('enabled') else None
+            detector = MissingEpisodeDetector(library_ids=library_ids)
+            
+            # 初始化数据库
+            db = get_database()
+            logger.info("数据库已初始化")
+            
+            # 初始化 MoviePilot 客户端
+            mp_config = config.get('moviepilot', {})
+            if mp_config.get('enabled') and mp_config.get('host'):
+                from app.moviepilot_client import MoviePilotClient
+                moviepilot_client = MoviePilotClient(
+                    host=mp_config['host'],
+                    username=mp_config.get('username', 'admin'),
+                    password=mp_config.get('password', '')
+                )
+                detector.moviepilot_client = moviepilot_client
+                logger.info(f"MoviePilot 客户端已初始化：{mp_config['host']}")
+            
+            # 初始化 HDHive 客户端
+            hd_config = config.get('hdhive', {})
+            if hd_config.get('enabled') and hd_config.get('api_key'):
+                from app.hdhive_client import create_client_from_config
+                hdhive_client = create_client_from_config(hd_config)
+                logger.info(f"HDHive 客户端已初始化")
+            
+            # 测试连接
+            if emby_client.test_connection():
+                logger.info("✅ Emby 连接测试成功")
+            else:
+                logger.warning("⚠️ Emby 连接测试失败，请检查配置")
+        else:
+            logger.warning("⚠️ Emby 配置未找到，请在配置页面设置")
+        
+        logger.info("服务启动完成")
+    except Exception as e:
+        logger.error(f"启动失败：{e}")
+
+
 # 全局变量（通过依赖注入管理，避免导入时初始化）
 emby_client: Optional[EmbyClient] = None
 tmdb_client: Optional[TMDBClient] = None
@@ -60,6 +120,7 @@ exporter: Optional[ReportExporter] = None
 detection_scheduler: Optional[DetectionScheduler] = None
 config_manager: Optional[ConfigManager] = None
 moviepilot_client: Optional[Any] = None
+hdhive_client: Optional[Any] = None
 last_result = None
 
 
@@ -376,6 +437,25 @@ async def get_results():
     }
 
 
+@app.get("/api/tmdb/{series_id}")
+async def get_tmdb_id(series_id: str):
+    """获取剧集的 TMDB ID"""
+    global emby_client
+    
+    if emby_client is None:
+        raise HTTPException(status_code=400, detail="Emby 未配置")
+    
+    try:
+        tmdb_id = emby_client.get_tmdb_id(series_id)
+        if tmdb_id:
+            return {"status": "success", "series_id": series_id, "tmdb_id": tmdb_id}
+        else:
+            return {"status": "not_found", "series_id": series_id, "message": "未找到 TMDB ID"}
+    except Exception as e:
+        logger.error(f"获取 TMDB ID 失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/cards")
 async def get_cards(page: int = 1, page_size: int = 20):
     """获取海报墙数据（支持分页）"""
@@ -686,6 +766,207 @@ async def get_last_detection():
         "cards": cards,
         "from_cache": True
     }
+
+
+# ============ HDHive API ============
+
+@app.get("/api/hdhive/config")
+async def get_hdhive_config():
+    """获取 HDHive 配置"""
+    if config_manager is None:
+        raise HTTPException(status_code=500, detail="配置管理器未初始化")
+    
+    config = config_manager.get_hdhive_config()
+    # 隐藏敏感信息
+    safe_config = {
+        "enabled": config.get("enabled", False),
+        "api_key": "***" if config.get("api_key") else "",
+        "base_url": config.get("base_url", "https://hdhive.com/api/open"),
+        "proxy": {
+            "enabled": config.get("proxy", {}).get("enabled", False),
+            "host": config.get("proxy", {}).get("host", ""),
+            "port": config.get("proxy", {}).get("port", 0),
+            "has_auth": bool(config.get("proxy", {}).get("username"))
+        },
+        "settings": config.get("settings", {})
+    }
+    
+    return {"status": "success", "config": safe_config}
+
+
+@app.post("/api/hdhive/config")
+async def set_hdhive_config(config: Dict[str, Any]):
+    """设置 HDHive 配置"""
+    global hdhive_client
+    
+    if config_manager is None:
+        raise HTTPException(status_code=500, detail="配置管理器未初始化")
+    
+    # 如果 API Key 为空，保留原有值
+    existing_config = config_manager.get_hdhive_config()
+    api_key = config.get("api_key", "")
+    if api_key == "***" or not api_key:
+        api_key = existing_config.get("api_key", "")
+    
+    success = config_manager.set_hdhive_config(
+        api_key=api_key,
+        base_url=config.get("base_url", "https://hdhive.com/api/open"),
+        enabled=config.get("enabled", False),
+        proxy=config.get("proxy"),
+        settings=config.get("settings")
+    )
+    
+    if success:
+        # 重新初始化客户端
+        if hdhive_client:
+            hdhive_client.close()
+        
+        from app.hdhive_client import create_client_from_config
+        hdhive_config = config_manager.get_hdhive_config()
+        hdhive_client = create_client_from_config(hdhive_config)
+        
+        # 测试连接
+        test_result = None
+        if hdhive_config.get("enabled") and api_key:
+            try:
+                hdhive_client.ping()
+                test_result = "连接成功"
+            except Exception as e:
+                test_result = f"连接失败: {str(e)}"
+        
+        return {
+            "status": "success",
+            "message": "配置保存成功",
+            "test_result": test_result
+        }
+    else:
+        raise HTTPException(status_code=500, detail="配置保存失败")
+
+
+@app.get("/api/hdhive/status")
+async def get_hdhive_status():
+    """获取 HDHive 状态（积分余额、配额等）"""
+    if hdhive_client is None:
+        return {"status": "not_configured", "message": "HDHive 未配置"}
+    
+    try:
+        # 获取用户信息
+        user_info = hdhive_client.get_user_info()
+        quota = hdhive_client.get_quota()
+        
+        return {
+            "status": "success",
+            "user": {
+                "nickname": user_info.get("nickname", ""),
+                "is_vip": user_info.get("is_vip", False),
+                "points": user_info.get("user_meta", {}).get("points", 0)
+            },
+            "quota": {
+                "daily_reset": quota.get("daily_reset"),
+                "endpoint_limit": quota.get("endpoint_limit"),
+                "endpoint_remaining": quota.get("endpoint_remaining")
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/hdhive/search")
+async def search_hdhive_resources(tmdb_id: str, season: int = None):
+    """
+    搜索 HDHive 资源
+    
+    Args:
+        tmdb_id: TMDB ID
+        season: 季号（可选）
+    """
+    if hdhive_client is None:
+        raise HTTPException(status_code=400, detail="HDHive 未配置")
+    
+    try:
+        # 搜索资源
+        resources = hdhive_client.search_tv_resources(
+            tmdb_id=tmdb_id,
+            season=season,
+            prefer_115=config_manager.get_hdhive_config().get("settings", {}).get("prefer_115", True)
+        )
+        
+        # 过滤资源（只返回包含所需信息的）
+        result = []
+        for r in resources:
+            result.append({
+                "slug": r.get("slug"),
+                "title": r.get("title"),
+                "share_size": r.get("share_size"),
+                "video_resolution": r.get("video_resolution", []),
+                "source": r.get("source", []),
+                "subtitle_language": r.get("subtitle_language", []),
+                "unlock_points": r.get("unlock_points") or 0,
+                "is_unlocked": r.get("is_unlocked", False),
+                "validate_status": r.get("validate_status"),
+                "is_official": r.get("is_official", False)
+            })
+        
+        return {
+            "status": "success",
+            "tmdb_id": tmdb_id,
+            "total": len(result),
+            "resources": result
+        }
+    except Exception as e:
+        logger.error(f"搜索 HDHive 资源失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/hdhive/unlock")
+async def unlock_hdhive_resource(data: Dict[str, str]):
+    """
+    解锁 HDHive 资源
+    
+    Args:
+        data: {"slug": "资源标识"}
+    """
+    if hdhive_client is None:
+        raise HTTPException(status_code=400, detail="HDHive 未配置")
+    
+    slug = data.get("slug")
+    if not slug:
+        raise HTTPException(status_code=400, detail="缺少资源标识")
+    
+    try:
+        # 解锁资源
+        result = hdhive_client.unlock_resource(slug)
+        
+        # 保存解锁记录到数据库
+        if db and result.get("url"):
+            db.save_hdhive_unlock(
+                slug=slug,
+                url=result.get("url"),
+                access_code=result.get("access_code", ""),
+                points_spent=result.get("points_spent", 0)
+            )
+        
+        return {
+            "status": "success",
+            "message": "解锁成功" if not result.get("already_owned") else "已拥有该资源",
+            "data": result
+        }
+    except Exception as e:
+        logger.error(f"解锁资源失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/hdhive/history")
+async def get_hdhive_unlock_history(limit: int = 20):
+    """获取 HDHive 解锁历史"""
+    if db is None:
+        return {"status": "no_db", "message": "数据库未初始化", "history": []}
+    
+    try:
+        history = db.get_hdhive_unlocks(limit)
+        return {"status": "success", "history": history}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "history": []}
 
 
 # ============ 静态文件 ============

@@ -126,6 +126,24 @@ class Database:
                 )
             ''')
             
+            # HDHive 解锁历史表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS hdhive_unlocks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    slug TEXT NOT NULL UNIQUE,
+                    series_id TEXT,
+                    series_name TEXT,
+                    season INTEGER,
+                    tmdb_id TEXT,
+                    title TEXT,
+                    points_spent INTEGER DEFAULT 0,
+                    unlock_url TEXT,
+                    access_code TEXT,
+                    unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             # 创建索引
             # 设置 WAL 模式和并发优化
             cursor.execute('PRAGMA journal_mode=WAL')
@@ -138,6 +156,8 @@ class Database:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_detected_at ON missing_episodes(detected_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_download_status ON download_history(status)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_series_season ON download_history(series_id, season_number)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_hdhive_slug ON hdhive_unlocks(slug)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_hdhive_series ON hdhive_unlocks(series_id, season)')
             
             conn.commit()
             logger.info("数据库表结构已初始化")
@@ -456,6 +476,90 @@ class Database:
             
             logger.info(f"已清理 {deleted} 条旧记录")
             return deleted
+    
+    # ==================== HDHive 解锁记录 ====================
+    
+    def save_hdhive_unlock(self, slug: str, url: str, access_code: str = "",
+                           series_id: str = None, series_name: str = None,
+                           season: int = None, tmdb_id: str = None,
+                           title: str = None, points_spent: int = 0) -> int:
+        """
+        保存 HDHive 解锁记录
+        
+        Args:
+            slug: 资源唯一标识
+            url: 解锁后的链接
+            access_code: 访问码
+            series_id: 剧集 ID
+            series_name: 剧集名称
+            season: 季号
+            tmdb_id: TMDB ID
+            title: 资源标题
+            points_spent: 消耗积分
+            
+        Returns:
+            记录 ID
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO hdhive_unlocks 
+                (slug, series_id, series_name, season, tmdb_id, title, 
+                 points_spent, unlock_url, access_code, unlocked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (slug, series_id, series_name, season, tmdb_id, title,
+                  points_spent, url, access_code))
+            
+            conn.commit()
+            unlock_id = cursor.lastrowid
+            logger.info(f"已保存 HDHive 解锁记录: {slug}")
+            return unlock_id
+    
+    def get_hdhive_unlocks(self, limit: int = 50) -> List[Dict]:
+        """
+        获取 HDHive 解锁历史
+        
+        Args:
+            limit: 最大返回数量
+            
+        Returns:
+            解锁记录列表
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT * FROM hdhive_unlocks 
+                ORDER BY unlocked_at DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_hdhive_unlock_by_slug(self, slug: str) -> Optional[Dict]:
+        """
+        根据 slug 获取解锁记录
+        
+        Args:
+            slug: 资源唯一标识
+            
+        Returns:
+            解锁记录或 None
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT * FROM hdhive_unlocks WHERE slug = ?
+            ''', (slug,))
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def is_hdhive_unlocked(self, slug: str) -> bool:
+        """检查资源是否已解锁"""
+        return self.get_hdhive_unlock_by_slug(slug) is not None
     
     def export_to_csv(self, output_path: str) -> int:
         """

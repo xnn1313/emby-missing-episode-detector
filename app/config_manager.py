@@ -198,6 +198,57 @@ class ConfigManager:
         }
         return self._save_config(self.config)
     
+    def get_hdhive_config(self) -> Dict:
+        """获取 HDHive 配置"""
+        return self.config.get("hdhive", {
+            "enabled": False,
+            "api_key": "",
+            "base_url": "https://hdhive.com/api/open",
+            "proxy": {
+                "enabled": False,
+                "host": "",
+                "port": 0,
+                "username": "",
+                "password": ""
+            },
+            "settings": {
+                "max_points_per_unlock": 50,
+                "prefer_115": True,
+                "auto_unlock": False
+            }
+        })
+    
+    def set_hdhive_config(self, api_key: str = "", base_url: str = "https://hdhive.com/api/open",
+                          enabled: bool = False, proxy: Dict = None, settings: Dict = None) -> bool:
+        """
+        设置 HDHive 配置
+        
+        Args:
+            api_key: API Key
+            base_url: API 基础 URL
+            enabled: 是否启用
+            proxy: 代理配置 {"enabled": bool, "host": str, "port": int, "username": str, "password": str}
+            settings: 设置 {"max_points_per_unlock": int, "prefer_115": bool, "auto_unlock": bool}
+        """
+        self.config["hdhive"] = {
+            "enabled": enabled,
+            "api_key": api_key,
+            "base_url": base_url,
+            "proxy": proxy or {
+                "enabled": False,
+                "host": "",
+                "port": 0,
+                "username": "",
+                "password": ""
+            },
+            "settings": settings or {
+                "max_points_per_unlock": 50,
+                "prefer_115": True,
+                "auto_unlock": False
+            }
+        }
+        return self._save_config(self.config)
+    
     def get_all_config(self) -> Dict:
         """获取完整配置"""
         return self.config.copy()

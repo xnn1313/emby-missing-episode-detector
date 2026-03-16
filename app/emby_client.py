@@ -33,7 +33,24 @@ class EmbyClient:
             },
             timeout=httpx.Timeout(timeout=30.0, connect=5.0, read=30.0, write=30.0)
         )
+        
+        # 获取用户 ID
+        self._user_id = None
+        self._init_user_id()
+        
         logger.info(f"Emby 客户端已初始化：{self.host}")
+    
+    def _init_user_id(self):
+        """初始化用户 ID"""
+        try:
+            response = self.client.get('/Users')
+            if response.status_code == 200:
+                users = response.json()
+                if users:
+                    self._user_id = users[0].get('Id')
+                    logger.info(f"获取用户 ID: {self._user_id}")
+        except Exception as e:
+            logger.warning(f"获取用户 ID 失败: {e}")
     
     def close(self):
         """关闭客户端（释放连接池）"""
@@ -290,9 +307,25 @@ class EmbyClient:
     def get_item(self, item_id: str) -> Optional[Dict]:
         """获取单个项目详情"""
         try:
-            response = self.client.get(f'/Users/me/Items/{item_id}')
+            # 优先使用用户 ID 路径
+            if self._user_id:
+                response = self.client.get(f'/Users/{self._user_id}/Items/{item_id}')
+                if response.status_code == 200:
+                    data = response.json()
+                    # 如果是季或集，获取其系列信息
+                    if data.get('Type') in ['Season', 'Episode']:
+                        series_id = data.get('SeriesId')
+                        if series_id:
+                            series_resp = self.client.get(f'/Users/{self._user_id}/Items/{series_id}')
+                            if series_resp.status_code == 200:
+                                return series_resp.json()
+                    return data
+            
+            # 备用方法
+            response = self.client.get(f'/Items/{item_id}')
             if response.status_code == 200:
                 return response.json()
+            
             return None
         except Exception as e:
             logger.error(f"获取项目详情失败 {item_id}: {e}")

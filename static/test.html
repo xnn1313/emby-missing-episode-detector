@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>测试页面</title>
+    <style>
+        .page { display: none; }
+        .page.active { display: block; }
+        .nav-item { cursor: pointer; padding: 10px; }
+        .nav-item.active { background: #7c3aed; color: white; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-item active" data-page="dashboard">仪表盘</div>
+        <div class="nav-item" data-page="config">配置</div>
+    </nav>
+    
+    <div id="page-dashboard" class="page active">
+        <h1>仪表盘</h1>
+    </div>
+    
+    <div id="page-config" class="page">
+        <h1>配置</h1>
+    </div>
+    
+    <script>
+        console.log('Script loaded');
+        
+        window.showPage = function(pageId) {
+            console.log('showPage called with:', pageId);
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            const targetPage = document.getElementById('page-' + pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+                console.log('Page activated:', pageId);
+            }
+            
+            const activeNav = document.querySelector('.nav-item[data-page="' + pageId + '"]');
+            if (activeNav) {
+                activeNav.classList.add('active');
+                console.log('Nav activated:', pageId);
+            }
+        };
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOMContentLoaded');
+            
+            document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+                item.addEventListener('click', function() {
+                    const pageId = this.dataset.page;
+                    console.log('Nav clicked:', pageId);
+                    showPage(pageId);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

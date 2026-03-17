@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emby 缺集检测系统</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* ========== CSS 变量 ========== */
@@ -774,7 +777,7 @@
         let allCards = []; // 缓存所有卡片数据
 
         // ========== 页面导航 ==========
-        function showPage(pageId) {
+        window.showPage = function(pageId) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             
@@ -798,11 +801,11 @@
             if (pageId === 'history') loadHistory();
         }
 
-        function toggleSidebar() {
+        window.toggleSidebar = function() {
             document.getElementById('sidebar').classList.toggle('open');
         }
 
-        function toggleTheme() {
+        window.toggleTheme = function() {
             document.body.classList.toggle('dark-mode');
             localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
         }
@@ -811,12 +814,6 @@
         async function loadDashboard() {
             const grid = document.getElementById('seriesGrid');
             grid.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>加载中...</p></div>';
-            
-            // 重置分页状态
-            currentPage = 1;
-            isLoading = false;
-            hasMore = true;
-            allCards = [];
 
             try {
                 // 并行加载卡片数据和下载历史
@@ -1093,6 +1090,9 @@
                                             : `<button class="btn btn-primary download-btn" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-season="${card.season || 1}"><i class="fas fa-download"></i> 推送下载</button>`
                                     }
                                 </div>
+                                <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" title="查询 HDHive 资源">
+                                    <i class="fas fa-hive"></i> 查询 HDHive
+                                </button>
                             </div>
                         </div>`;
                     }).join('');
@@ -1117,7 +1117,7 @@
         }
 
         // ========== 筛选和搜索 ==========
-        function filterSeries() {
+        window.filterSeries = function() {
             const search = document.getElementById('searchInput').value.toLowerCase();
             const season = document.getElementById('filterSeason').value;
             const status = document.getElementById('filterStatus').value;
@@ -1156,7 +1156,7 @@
         }
 
         // ========== API 调用 ==========
-        async function runDetection() {
+        window.runDetection = async function() {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检测中...';
 
@@ -1231,7 +1231,7 @@
             }
         }
 
-        async function refreshData() {
+        window.refreshData = async function() {
             // 重置分页并重新加载
             currentPage = 1;
             hasMore = true;
@@ -1323,7 +1323,7 @@
             }
         }
 
-        async function saveConfig(e) {
+        window.saveConfig = async function(e) {
             e.preventDefault();
             
             const embyHost = document.getElementById('embyHost').value.trim();
@@ -1338,10 +1338,6 @@
             const config = {
                 host: embyHost,
                 api_key: embyApiKey,
-                tmdb: {
-                    api_key: document.getElementById('tmdbApiKey').value.trim(),
-                    enabled: !!document.getElementById('tmdbApiKey').value.trim()
-                },
                 moviepilot: {
                     host: document.getElementById('mpHost').value.trim(),
                     username: document.getElementById('mpUsername').value.trim(),
@@ -1402,7 +1398,7 @@
             }
         }
         
-        async function testHdhiveConnection() {
+        window.testHdhiveConnection = async function() {
             const statusDiv = document.getElementById('hdhiveStatus');
             statusDiv.style.display = 'block';
             statusDiv.style.background = '#1a1a2e';
@@ -1496,7 +1492,7 @@
             }
         }
 
-        async function refreshDownloads() {
+        window.refreshDownloads = async function() {
             loadDownloads();
         }
 
@@ -1581,8 +1577,6 @@
                     `;
                     return;
                 }
-                    return;
-                }
                 
                 // 展示资源列表
                 let html = `<p style="color:#4ade80;margin-bottom:10px;">找到 ${searchData.total} 个资源</p>`;
@@ -1618,6 +1612,32 @@
             }
         }
         
+        // 复制并关闭弹窗
+        function copyAndClose() {
+            const modal = document.getElementById('hdhiveModal');
+            if (modal) {
+                const linkElem = modal.querySelector('a[href]');
+                const codeElem = modal.querySelector('span[style*="fbbf24"]');
+                const urlText = linkElem ? linkElem.textContent.trim() : '';
+                const accessCode = codeElem ? codeElem.textContent.trim() : '';
+                const fullText = accessCode ? urlText + ' ' + accessCode : urlText;
+                
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(fullText).then(() => modal.remove());
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = fullText;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try { document.execCommand('copy'); } catch (e) {}
+                    document.body.removeChild(textarea);
+                    modal.remove();
+                }
+            }
+        }
+        
         async function unlockHdhiveResource(slug, title, points, elem) {
             if (!confirm(`确定要解锁吗？\n\n资源: ${title}\n消耗积分: ${points}`)) {
                 return;
@@ -1643,7 +1663,7 @@
                                 <p style="margin-bottom:5px;">链接: <a href="${url}" target="_blank" style="color:#667eea;">${url}</a></p>
                                 ${code ? `<p>访问码: <span style="color:#fbbf24;font-weight:bold;">${code}</span></p>` : ''}
                             </div>
-                            <button class="btn btn-primary" style="margin-top:10px;" onclick="navigator.clipboard.writeText('${url} ${code}'.trim());alert('已复制！')">复制链接</button>
+                            <button class="btn btn-primary" style="margin-top:10px;" onclick="copyAndClose()">复制并关闭</button>
                         </div>
                     `;
                 } else {

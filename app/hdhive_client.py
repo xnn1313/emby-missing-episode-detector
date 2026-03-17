@@ -179,8 +179,14 @@ class HDHiveClient:
         if media_type not in ("movie", "tv"):
             raise HDHiveError("400", "参数错误", "media_type 必须是 movie 或 tv")
         
-        data = self._request("GET", f"/resources/{media_type}/{tmdb_id}")
-        return data.get("data", [])
+        try:
+            data = self._request("GET", f"/resources/{media_type}/{tmdb_id}")
+            resources = data.get("data", [])
+            logger.info(f"HDHive 获取资源：TMDB {tmdb_id} ({media_type}) -> {len(resources)} 个资源")
+            return resources
+        except Exception as e:
+            logger.error(f"HDHive 获取资源失败：TMDB {tmdb_id}, 错误：{e}")
+            return []
     
     def unlock_resource(self, slug: str) -> Dict[str, Any]:
         """
@@ -249,7 +255,7 @@ class HDHiveClient:
     def search_tv_resources(self, tmdb_id: str, season: int = None, 
                             prefer_115: bool = True) -> List[Dict[str, Any]]:
         """
-        搜索电视剧资源并筛选
+        搜索电视剧资源并筛选（通过 TMDB ID）
         
         Args:
             tmdb_id: TMDB ID
@@ -259,11 +265,14 @@ class HDHiveClient:
         Returns:
             筛选后的资源列表
         """
+        logger.info(f"HDHive 搜索 TV 资源：TMDB ID={tmdb_id}, season={season}, prefer_115={prefer_115}")
         resources = self.get_resources(tmdb_id, "tv")
+        logger.info(f"HDHive 原始资源数：{len(resources)}")
         
         # 筛选 115 网盘
-        if prefer_115:
+        if prefer_115 and resources:
             resources_115 = [r for r in resources if self._is_115_resource(r)]
+            logger.info(f"HDHive 115 资源数：{len(resources_115)}")
             if resources_115:
                 resources = resources_115
         

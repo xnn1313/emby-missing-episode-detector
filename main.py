@@ -184,8 +184,17 @@ class MissingEpisode(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """主页 - 重定向到海报墙"""
-    from fastapi.responses import FileResponse
-    return FileResponse(static_path / "index.html")
+    from fastapi.responses import HTMLResponse
+    with open(static_path / "index.html", "r", encoding="utf-8") as f:
+        html = f.read()
+    return HTMLResponse(
+        content=html,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
 
 
 @app.get("/api/status")
@@ -437,57 +446,6 @@ async def get_results():
     }
 
 
-@app.get("/api/tmdb/{series_id}")
-async def get_tmdb_id(series_id: str):
-    """获取剧集的 TMDB ID"""
-    global emby_client
-    
-    if emby_client is None:
-        raise HTTPException(status_code=400, detail="Emby 未配置")
-    
-    try:
-        # 先尝试从 Emby 获取
-        tmdb_id = emby_client.get_tmdb_id(series_id)
-        if tmdb_id:
-            return {"status": "success", "series_id": series_id, "tmdb_id": tmdb_id}
-        
-        # 如果没有，尝试获取剧集名称并通过名称搜索
-        item = emby_client.get_item(series_id)
-        if item:
-            name = item.get('Name', '')
-            year = item.get('ProductionYear', '')
-            
-            # 尝试通过 TMDB API 搜索
-            tmdb_config = config_manager.get_tmdb_config() if config_manager else {}
-            if tmdb_config.get('api_key'):
-                import httpx
-                tmdb_api_key = tmdb_config['api_key']
-                search_url = f"https://api.themoviedb.org/3/search/tv?api_key={tmdb_api_key}&query={name}"
-                if year:
-                    search_url += f"&first_air_date_year={year}"
-                
-                resp = httpx.get(search_url, timeout=10)
-                if resp.status_code == 200:
-                    results = resp.json().get('results', [])
-                    if results:
-                        tmdb_id = str(results[0].get('id'))
-                        logger.info(f"通过 TMDB API 搜索到: {name} -> {tmdb_id}")
-                        return {"status": "success", "series_id": series_id, "tmdb_id": tmdb_id, "source": "search"}
-            
-            return {
-                "status": "not_found", 
-                "series_id": series_id, 
-                "message": "未找到 TMDB ID",
-                "hint": "请检查剧集刮削信息或配置 TMDB API Key"
-            }
-        else:
-            return {"status": "not_found", "series_id": series_id, "message": "未找到剧集信息"}
-            
-    except Exception as e:
-        logger.error(f"获取 TMDB ID 失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/tmdb/search")
 async def search_tmdb_by_name(name: str):
     """通过剧集名称搜索 TMDB ID"""
@@ -496,6 +454,8 @@ async def search_tmdb_by_name(name: str):
     # 获取 TMDB API Key（可选）
     tmdb_config = config_manager.get_tmdb_config() if config_manager else {}
     tmdb_api_key = tmdb_config.get('api_key', '')
+    
+    logger.info(f"TMDB 搜索请求：name={name}, api_key={'已配置' if tmdb_api_key else '未配置'}")
     
     if not tmdb_api_key:
         # 使用公共 API Key 或返回错误
@@ -530,6 +490,56 @@ async def search_tmdb_by_name(name: str):
         logger.error(f"TMDB 搜索失败: {e}")
         return {"status": "error", "message": str(e)}
 
+
+@app.get("/api/tmdb/{series_id}")
+async def get_tmdb_id(series_id: str):
+    """获取剧集的 TMDB ID"""
+    global emby_client
+    
+    if emby_client is None:
+        raise HTTPException(status_code=400, detail="Emby 未配置")
+    
+    try:
+        # 先尝试从 Emby 获取
+        tmdb_id = emby_client.get_tmdb_id(series_id)
+        if tmdb_id:
+            return {"status": "success", "series_id": series_id, "tmdb_id": tmdb_id}
+        
+        # 如果没有，尝试获取剧集名称并通过名称搜索
+        item = emby_client.get_item(series_id)
+        if item:
+            name = item.get('Name', '')
+            year = item.get('ProductionYear', '')
+            
+            # 尝试通过 TMDB API 搜索
+            tmdb_config = config_manager.get_tmdb_config() if config_manager else {}
+            if tmdb_config.get('api_key'):
+                import httpx
+                tmdb_api_key = tmdb_config['api_key']
+                search_url = f"https://api.themoviedb.org/3/search/tv?api_key={tmdb_api_key}&query={name}"
+                if year:
+                    search_url += f"&first_air_date_year={year}"
+                
+                resp = httpx.get(search_url, timeout=10)
+                if resp.status_code == 200:
+                    results = resp.json().get('results', [])
+                    if results:
+                        tmdb_id = str(results[0].get('id'))
+                        logger.info(f"通过 TMDB API 搜索到：{name} -> {tmdb_id}")
+                        return {"status": "success", "series_id": series_id, "tmdb_id": tmdb_id, "source": "search"}
+            
+            return {
+                "status": "not_found", 
+                "series_id": series_id, 
+                "message": "未找到 TMDB ID",
+                "hint": "请检查剧集刮削信息或配置 TMDB API Key"
+            }
+        else:
+            return {"status": "not_found", "series_id": series_id, "message": "未找到剧集信息"}
+            
+    except Exception as e:
+        logger.error(f"获取 TMDB ID 失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/cards")
 async def get_cards(page: int = 1, page_size: int = 20):

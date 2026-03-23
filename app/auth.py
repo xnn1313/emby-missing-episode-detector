@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from pathlib import Path
 import json
+from loguru import logger
 
 try:
     from passlib.context import CryptContext
@@ -20,8 +21,6 @@ except ImportError:
     jwt = None
     JWTError = Exception
     logger.warning("认证库未安装，账号系统将不可用")
-
-from loguru import logger
 
 
 # 密码加密上下文
@@ -241,9 +240,12 @@ def get_user_database() -> UserDatabase:
     """获取用户数据库实例"""
     global user_db
     if user_db is None:
-        from pathlib import Path
-        project_root = Path(__file__).parent.parent
-        db_path = project_root / "data" / "users.json"
+        db_path = os.getenv("USER_DB_PATH")
+        if db_path:
+            db_path = Path(db_path)
+        else:
+            project_root = Path(__file__).parent.parent
+            db_path = project_root / "data" / "users.json"
         user_db = UserDatabase(str(db_path))
         
         # 创建默认管理员

@@ -5,6 +5,7 @@
 
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from loguru import logger
@@ -13,17 +14,18 @@ from loguru import logger
 class ConfigManager:
     """配置管理器"""
     
-    def __init__(self, config_path: str = "config/settings.json"):
+    def __init__(self, config_path: Optional[str] = None):
         """
         初始化配置管理器
         
         Args:
             config_path: 配置文件路径
         """
-        self.config_path = Path(config_path)
+        env_config_path = os.getenv("CONFIG_PATH")
+        self.config_path = Path(config_path or env_config_path or "config/settings.json")
         self._ensure_directory()
         self.config = self._load_config()
-        logger.info(f"配置管理器已初始化：{config_path}")
+        logger.info(f"配置管理器已初始化：{self.config_path}")
     
     def _ensure_directory(self):
         """确保配置目录存在"""
@@ -85,6 +87,15 @@ class ConfigManager:
                 "enabled": False,
                 "auto_download": True,
                 "download_path": ""
+            },
+            "wecom": {
+                "enabled": False,
+                "corp_id": "",
+                "agent_id": 0,
+                "corp_secret": "",
+                "token": "",
+                "encoding_aes_key": "",
+                "base_url": "https://qyapi.weixin.qq.com/cgi-bin"
             }
         }
     
@@ -217,6 +228,18 @@ class ConfigManager:
                 "auto_unlock": False
             }
         })
+
+    def get_wecom_config(self) -> Dict:
+        """获取企业微信配置"""
+        return self.config.get("wecom", {
+            "enabled": False,
+            "corp_id": "",
+            "agent_id": 0,
+            "corp_secret": "",
+            "token": "",
+            "encoding_aes_key": "",
+            "base_url": "https://qyapi.weixin.qq.com/cgi-bin"
+        })
     
     def set_hdhive_config(self, api_key: str = "", base_url: str = "https://hdhive.com/api/open",
                           enabled: bool = False, proxy: Dict = None, settings: Dict = None) -> bool:
@@ -248,10 +271,32 @@ class ConfigManager:
             }
         }
         return self._save_config(self.config)
+
+    def set_wecom_config(
+        self,
+        enabled: bool = False,
+        corp_id: str = "",
+        agent_id: int = 0,
+        corp_secret: str = "",
+        token: str = "",
+        encoding_aes_key: str = "",
+        base_url: str = "https://qyapi.weixin.qq.com/cgi-bin"
+    ) -> bool:
+        """设置企业微信配置"""
+        self.config["wecom"] = {
+            "enabled": enabled,
+            "corp_id": corp_id,
+            "agent_id": agent_id,
+            "corp_secret": corp_secret,
+            "token": token,
+            "encoding_aes_key": encoding_aes_key,
+            "base_url": base_url
+        }
+        return self._save_config(self.config)
     
     def get_all_config(self) -> Dict:
         """获取完整配置"""
-        return self.config.copy()
+        return deepcopy(self.config)
     
     def update_config(self, new_config: Dict) -> bool:
         """批量更新配置"""

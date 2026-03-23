@@ -183,6 +183,11 @@ class HDHiveClient:
             data = self._request("GET", f"/resources/{media_type}/{tmdb_id}")
             resources = data.get("data", [])
             logger.info(f"HDHive 获取资源：TMDB {tmdb_id} ({media_type}) -> {len(resources)} 个资源")
+            logger.debug(f"HDHive 原始返回数据：{data}")
+            # 记录前 3 个资源的详细信息
+            if resources:
+                for i, r in enumerate(resources[:3]):
+                    logger.info(f"资源 {i+1}: title={r.get('title')}, pan_type={r.get('pan_type')}, points={r.get('unlock_points')}")
             return resources
         except Exception as e:
             logger.error(f"HDHive 获取资源失败：TMDB {tmdb_id}, 错误：{e}")

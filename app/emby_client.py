@@ -8,6 +8,10 @@ from typing import Optional, List, Dict, Any
 from loguru import logger
 
 
+class EmbyClientError(Exception):
+    """Emby 客户端错误"""
+
+
 class EmbyClient:
     """Emby API 客户端"""
     
@@ -31,7 +35,7 @@ class EmbyClient:
                 'X-Emby-Token': api_key,
                 'Content-Type': 'application/json'
             },
-            timeout=httpx.Timeout(timeout=30.0, connect=5.0, read=30.0, write=30.0)
+            timeout=httpx.Timeout(timeout=120.0, connect=10.0, read=120.0, write=120.0)
         )
         
         # 获取用户 ID
@@ -81,12 +85,16 @@ class EmbyClient:
         """获取媒体库列表"""
         try:
             response = self.client.get('/Library/VirtualFolders')
-            if response.status_code == 200:
-                return response.json()
-            return []
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            message = f"获取媒体库失败: HTTP {e.response.status_code}"
+            logger.error(message)
+            raise EmbyClientError(message) from e
         except Exception as e:
-            logger.error(f"获取媒体库失败：{e}")
-            return []
+            message = f"获取媒体库失败：{e}"
+            logger.error(message)
+            raise EmbyClientError(message) from e
     
     def get_tv_shows(self, library_id: Optional[str] = None, library_ids: Optional[List[str]] = None, dedup_by_name: bool = True, limit: int = 10000) -> List[Dict]:
         """
@@ -118,9 +126,9 @@ class EmbyClient:
                         'Fields': 'Overview,AirTime,Studios,Genres,ProductionYear,PremiereDate'
                     }
                     response = self.client.get('/Items', params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        all_items.extend(data.get('Items', []))
+                    response.raise_for_status()
+                    data = response.json()
+                    all_items.extend(data.get('Items', []))
                 
                 items = self._deduplicate_items(all_items, dedup_by_name)
                 logger.info(f"从 {len(library_ids)} 个媒体库获取到 {len(items)} 个剧集（去重后）")
@@ -133,19 +141,25 @@ class EmbyClient:
                     'Limit': limit
                 }
                 response = self.client.get('/Items', params=params)
-                if response.status_code == 200:
-                    data = response.json()
-                    all_items = data.get('Items', [])
-                    total_count = data.get('TotalRecordCount', len(all_items))
-                    
-                    # 如果数据量超过 limit，记录警告
-                    if total_count > limit:
-                        logger.warning(f"剧集数量 ({total_count}) 超过 limit ({limit})，可能漏数据。建议增加 limit 或实现分页")
-                    
-                    items = self._deduplicate_items(all_items, dedup_by_name)
-                    logger.info(f"获取到 {len(items)} 个剧集（去重后），总数约：{total_count}")
+                response.raise_for_status()
+                data = response.json()
+                all_items = data.get('Items', [])
+                total_count = data.get('TotalRecordCount', len(all_items))
+                
+                # 如果数据量超过 limit，记录警告
+                if total_count > limit:
+                    logger.warning(f"剧集数量 ({total_count}) 超过 limit ({limit})，可能漏数据。建议增加 limit 或实现分页")
+                
+                items = self._deduplicate_items(all_items, dedup_by_name)
+                logger.info(f"获取到 {len(items)} 个剧集（去重后），总数约：{total_count}")
+        except httpx.HTTPStatusError as e:
+            message = f"获取剧集失败: HTTP {e.response.status_code}"
+            logger.error(message)
+            raise EmbyClientError(message) from e
         except Exception as e:
-            logger.error(f"获取剧集失败：{e}")
+            message = f"获取剧集失败：{e}"
+            logger.error(message)
+            raise EmbyClientError(message) from e
         
         return items
     

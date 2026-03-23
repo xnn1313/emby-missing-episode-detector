@@ -11,6 +11,7 @@
 - 🔍 **自动检测** - 扫描 Emby 媒体库，识别缺失剧集
 - 📊 **列表视图** - 支持排序、筛选、分页、暗黑模式
 - 🚀 **MoviePilot 集成** - 一键推送缺失剧集到 MoviePilot 自动下载
+- 💬 **企业微信搜剧解锁** - 在企业微信里搜索剧集、查看 HDHive 资源并回传解锁链接
 - 💾 **数据持久化** - 检测结果缓存，无需重复检测
 - 🎯 **智能去重** - 自动识别 Emby 重复刮削的剧集
 - ⏰ **定时检测** - 支持周期性自动检测
@@ -191,9 +192,42 @@ GET /api/scheduler/status
     "enabled": true,
     "auto_download": true,
     "download_path": "/downloads/tv"
+  },
+  "wecom": {
+    "enabled": false,
+    "corp_id": "wwxxxxxxxxxxxxxxxx",
+    "agent_id": 1000002,
+    "corp_secret": "",
+    "token": "",
+    "encoding_aes_key": "",
+    "base_url": "https://qyapi.weixin.qq.com/cgi-bin"
   }
 }
 ```
+
+### 企业微信命令
+
+在企业微信自建应用中把消息回调地址配置为：
+
+```text
+http://your-server:8080/api/wecom/callback
+```
+
+需要在系统配置或 `config/settings.json` 中填写：
+
+- `corp_id`：企业 ID
+- `agent_id`：应用 AgentId
+- `corp_secret`：应用 Secret，用于主动发送应用消息与校验连接
+- `token`：回调 Token
+- `encoding_aes_key`：回调 EncodingAESKey
+
+应用收到文本消息后支持以下命令：
+
+- `搜索 剧名`
+- `资源 1`
+- `解锁 1`
+- `历史`
+- `重置`
 
 ### 环境变量（可选）
 

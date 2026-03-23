@@ -4,38 +4,103 @@ TMDB API 客户端模块
 """
 
 import httpx
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from loguru import logger
 
 
 class TMDBClient:
     """TMDB API 客户端"""
     
-    def __init__(self, api_key: str, language: str = "zh-CN"):
+    def __init__(self, api_key: str, language: str = "zh-CN", proxy_url: Optional[str] = None):
         """
         初始化 TMDB 客户端
         
         Args:
             api_key: TMDB API 密钥
             language: 语言设置，默认中文
+            proxy_url: 代理地址
         """
         self.api_key = api_key
         self.language = language
+        self.proxy_url = (proxy_url or "").strip()
         self.base_url = "https://api.themoviedb.org/3"
+        client_kwargs: Dict[str, Any] = {
+            "base_url": self.base_url,
+            "headers": {"Content-Type": "application/json"},
+            "timeout": 30.0,
+        }
+        if self.proxy_url:
+            client_kwargs["proxies"] = {
+                "http://": self.proxy_url,
+                "https://": self.proxy_url,
+            }
         self.client = httpx.Client(
-            base_url=self.base_url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            timeout=30.0
+            **client_kwargs
         )
-        logger.info(f"TMDB 客户端已初始化 (语言：{language})")
+        logger.info(
+            f"TMDB 客户端已初始化 (语言：{language}, 代理：{'启用' if self.proxy_url else '禁用'})"
+        )
+
+    def _preferred_auth_modes(self) -> List[str]:
+        token = (self.api_key or "").strip()
+        if token.count(".") == 2 or token.startswith("eyJ"):
+            return ["bearer", "api_key"]
+        return ["api_key", "bearer"]
+
+    def _build_request_options(
+        self,
+        auth_mode: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, str]]:
+        request_params = dict(params or {})
+        headers: Dict[str, str] = {}
+
+        if auth_mode == "bearer":
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        else:
+            request_params["api_key"] = self.api_key
+
+        return request_params, headers
+
+    def _get(
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        operation: str = "TMDB 请求",
+    ) -> Tuple[httpx.Response, str]:
+        auth_modes = self._preferred_auth_modes()
+        response: Optional[httpx.Response] = None
+
+        for index, auth_mode in enumerate(auth_modes):
+            request_params, headers = self._build_request_options(auth_mode, params)
+            response = self.client.get(path, params=request_params, headers=headers or None)
+
+            if response.status_code in (401, 403) and index < len(auth_modes) - 1:
+                logger.warning(
+                    f"{operation}鉴权失败，切换鉴权方式重试: "
+                    f"status={response.status_code}, auth_mode={auth_mode}"
+                )
+                continue
+
+            return response, auth_mode
+
+        assert response is not None
+        return response, auth_modes[-1]
+
+    @staticmethod
+    def _compact_response_text(response: httpx.Response, max_length: int = 200) -> str:
+        body = (response.text or "").replace("\n", " ").replace("\r", " ").strip()
+        if len(body) > max_length:
+            return f"{body[:max_length]}..."
+        return body
     
     def test_connection(self) -> bool:
         """测试连接是否正常"""
         try:
-            response = self.client.get("/configuration")
+            response, auth_mode = self._get("/configuration", operation="TMDB 连接测试")
+            logger.info(
+                f"TMDB 连接测试响应: status={response.status_code}, auth_mode={auth_mode}"
+            )
             return response.status_code == 200
         except Exception as e:
             logger.error(f"TMDB 连接测试失败：{e}")
@@ -52,31 +117,69 @@ class TMDBClient:
         Returns:
             匹配的剧集信息，无匹配则返回 None
         """
+        candidates = self.search_tv_series_candidates(title, year=year, limit=1)
+        return candidates[0] if candidates else None
+
+    def search_tv_series_candidates(
+        self,
+        title: str,
+        year: Optional[int] = None,
+        limit: int = 5
+    ) -> List[Dict]:
+        """
+        搜索多个剧集候选
+
+        Args:
+            title: 剧集标题
+            year: 年份（可选，用于优先排序）
+            limit: 返回数量
+
+        Returns:
+            候选结果列表
+        """
         try:
+            logger.info(
+                f"TMDB TV 搜索开始: title={title}, year={year or '-'}, limit={limit}"
+            )
             params = {
                 "query": title,
                 "language": self.language
             }
-            
-            response = self.client.get("/search/tv", params=params)
+
+            response, auth_mode = self._get(
+                "/search/tv",
+                params=params,
+                operation=f"TMDB TV 搜索 {title}",
+            )
             if response.status_code == 200:
                 results = response.json().get("results", [])
-                
-                # 如果有年份，精确匹配
+                logger.info(
+                    f"TMDB TV 搜索响应: title={title}, status={response.status_code}, "
+                    f"auth_mode={auth_mode}, result_count={len(results)}"
+                )
+
                 if year and results:
+                    target_year = str(year)
+                    exact_matches = []
+                    other_matches = []
                     for result in results:
                         first_air_date = result.get("first_air_date", "")
-                        if first_air_date.startswith(str(year)):
-                            return result
-                    # 如果没有精确匹配，返回第一个结果
-                    return results[0] if results else None
-                
-                return results[0] if results else None
-            
-            return None
+                        if first_air_date.startswith(target_year):
+                            exact_matches.append(result)
+                        else:
+                            other_matches.append(result)
+                    results = exact_matches + other_matches
+
+                return results[:max(1, limit)]
+
+            logger.warning(
+                f"TMDB TV 搜索失败响应: title={title}, status={response.status_code}, "
+                f"auth_mode={auth_mode}, body={self._compact_response_text(response)}"
+            )
+            return []
         except Exception as e:
             logger.error(f"搜索剧集失败 {title}: {e}")
-            return None
+            return []
     
     def get_tv_series_details(self, series_id: int) -> Optional[Dict]:
         """
@@ -93,8 +196,8 @@ class TMDBClient:
                 "language": self.language,
                 "external_source": "tvdb_id"
             }
-            
-            response = self.client.get(f"/tv/{series_id}", params=params)
+
+            response, _ = self._get(f"/tv/{series_id}", params=params)
             if response.status_code == 200:
                 return response.json()
             return None
@@ -118,8 +221,8 @@ class TMDBClient:
                 "language": self.language,
                 "append_to_response": "external_ids"
             }
-            
-            response = self.client.get(f"/tv/{series_id}/season/{season_number}", params=params)
+
+            response, _ = self._get(f"/tv/{series_id}/season/{season_number}", params=params)
             if response.status_code == 200:
                 return response.json()
             return None
@@ -141,8 +244,8 @@ class TMDBClient:
         """
         try:
             params = {"language": self.language}
-            
-            response = self.client.get(
+
+            response, _ = self._get(
                 f"/tv/{series_id}/season/{season_number}/episode/{episode_number}",
                 params=params
             )
@@ -173,8 +276,8 @@ class TMDBClient:
                 "external_source": f"{source}_id",
                 "language": self.language
             }
-            
-            response = self.client.get(f"/find/{external_id}", params=params)
+
+            response, _ = self._get(f"/find/{external_id}", params=params)
             if response.status_code == 200:
                 data = response.json()
                 tv_results = data.get("tv_results", [])

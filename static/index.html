@@ -549,7 +549,7 @@
                         <i class="fas fa-sync-alt"></i>
                         刷新
                     </button>
-                    <button class="btn btn-primary" onclick="runDetection()">
+                    <button class="btn btn-primary" onclick="runDetection(this)">
                         <i class="fas fa-play"></i>
                         开始检测
                     </button>
@@ -653,7 +653,7 @@
             <div class="top-bar">
                 <h2>配置</h2>
             </div>
-            <div class="stat-card" style="max-width: 600px;">
+            <div class="stat-card" style="max-width: 760px;">
                 <form id="configForm" onsubmit="saveConfig(event)">
                     <div class="form-group">
                         <label>Emby 服务器地址</label>
@@ -745,6 +745,56 @@
                     </div>
                     
                     <div id="hdhiveStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+
+                    <hr style="margin: 24px 0; border-color: #444;">
+                    <h3 style="color: #667eea; margin-bottom: 15px;"><i class="fas fa-building"></i> 企业微信配置</h3>
+
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="wecomEnabled" style="width: auto;">
+                            启用企业微信搜剧解锁
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>企业 ID CorpID</label>
+                        <input type="text" id="wecomCorpId" class="filter-select" style="width: 100%;" placeholder="wwxxxxxxxxxxxxxxxx">
+                    </div>
+                    <div class="form-group">
+                        <label>应用 AgentId</label>
+                        <input type="number" id="wecomAgentId" class="filter-select" style="width: 100%;" placeholder="1000002">
+                    </div>
+                    <div class="form-group">
+                        <label>应用 Secret</label>
+                        <input type="password" id="wecomCorpSecret" class="filter-select" style="width: 100%;" placeholder="用于获取 AccessToken">
+                    </div>
+                    <div class="form-group">
+                        <label>回调 Token</label>
+                        <input type="password" id="wecomToken" class="filter-select" style="width: 100%;" placeholder="企业微信回调配置中的 Token">
+                    </div>
+                    <div class="form-group">
+                        <label>回调 EncodingAESKey</label>
+                        <input type="password" id="wecomEncodingAesKey" class="filter-select" style="width: 100%;" placeholder="43 位 EncodingAESKey">
+                    </div>
+                    <div class="form-group">
+                        <label>API 地址</label>
+                        <input type="text" id="wecomBaseUrl" class="filter-select" style="width: 100%;" value="https://qyapi.weixin.qq.com/cgi-bin">
+                    </div>
+                    <div class="form-group">
+                        <label>回调地址</label>
+                        <input type="text" id="wecomCallbackUrl" class="filter-select" style="width: 100%;" readonly>
+                        <div style="color: #888; font-size: 12px; margin-top: 6px;">
+                            把这个地址填到企业微信自建应用的接收消息配置里
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="button" class="btn btn-outline" onclick="testWeComConnection()" style="flex: 1;">
+                            <i class="fas fa-comment-dots"></i>
+                            测试企业微信
+                        </button>
+                    </div>
+
+                    <div id="wecomStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
                 </form>
             </div>
         </div>
@@ -847,7 +897,7 @@
                         <div class="empty-state">
                             <i class="fas fa-tv"></i>
                             <p>暂无检测结果</p>
-                            <button class="btn btn-primary" style="margin-top: 20px;" onclick="runDetection()">
+                            <button class="btn btn-primary" style="margin-top: 20px;" onclick="runDetection(this)">
                                 <i class="fas fa-play"></i>
                                 开始检测
                             </button>
@@ -983,7 +1033,7 @@
                                        </button>`
                             }
                         </div>
-                        <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" title="查询 HDHive 资源">
+                        <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-tmdb-id="${card.tmdb_id || ''}" title="查询 HDHive 资源">
                             <i class="fas fa-hive"></i> 查询 HDHive
                         </button>
                     </div>
@@ -1090,7 +1140,7 @@
                                             : `<button class="btn btn-primary download-btn" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-season="${card.season || 1}"><i class="fas fa-download"></i> 推送下载</button>`
                                     }
                                 </div>
-                                <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" title="查询 HDHive 资源">
+                                <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-tmdb-id="${card.tmdb_id || ''}" title="查询 HDHive 资源">
                                     <i class="fas fa-hive"></i> 查询 HDHive
                                 </button>
                             </div>
@@ -1156,15 +1206,22 @@
         }
 
         // ========== API 调用 ==========
-        window.runDetection = async function() {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检测中...';
+        window.runDetection = async function(btn) {
+            const actionBtn = btn || document.querySelector('#page-dashboard .toolbar-actions .btn-primary, #page-dashboard .empty-state .btn-primary');
+            if (!actionBtn) {
+                alert('检测按钮未找到，请刷新页面后重试');
+                return;
+            }
+
+            const originalHtml = actionBtn.innerHTML;
+            actionBtn.disabled = true;
+            actionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 检测中...';
 
             try {
                 const response = await fetch('/api/detect');
                 const data = await response.json();
 
-                if (data.status === 'success') {
+                if (response.ok && data.status === 'success') {
                     alert(`检测完成！\n\n总剧集：${data.stats.total_series}\n有缺集：${data.stats.series_with_missing}\n缺失总集数：${data.stats.total_missing_episodes}`);
                     loadDashboard();
                 } else {
@@ -1173,8 +1230,8 @@
             } catch (error) {
                 alert('检测失败：' + error.message);
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play"></i> 开始检测';
+                actionBtn.disabled = false;
+                actionBtn.innerHTML = originalHtml || '<i class="fas fa-play"></i> 开始检测';
             }
         }
 
@@ -1198,7 +1255,7 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 推送中...';
 
             try {
-                const response = await fetch('/api/download', {
+                const response = await authFetch('/api/download', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1290,9 +1347,84 @@
             }
         }
 
+        const AUTH_TOKEN_KEY = 'emby_detector_auth_token';
+
+        function getAuthHeaders(extraHeaders = {}) {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) {
+                return extraHeaders;
+            }
+            return {
+                ...extraHeaders,
+                Authorization: `Bearer ${token}`
+            };
+        }
+
+        async function ensureAuthenticated(forcePrompt = false) {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+            if (token && !forcePrompt) {
+                const meResponse = await fetch('/api/auth/me', {
+                    headers: getAuthHeaders()
+                });
+                if (meResponse.ok) {
+                    return true;
+                }
+                localStorage.removeItem(AUTH_TOKEN_KEY);
+            }
+
+            const username = window.prompt('请输入管理员用户名', 'admin');
+            if (!username) {
+                return false;
+            }
+
+            const password = window.prompt('请输入管理员密码');
+            if (password === null) {
+                return false;
+            }
+
+            const loginResponse = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (!loginResponse.ok) {
+                localStorage.removeItem(AUTH_TOKEN_KEY);
+                alert('登录失败，请检查用户名和密码');
+                return false;
+            }
+
+            const loginData = await loginResponse.json();
+            localStorage.setItem(AUTH_TOKEN_KEY, loginData.access_token);
+            return true;
+        }
+
+        async function authFetch(url, options = {}) {
+            let response = await fetch(url, {
+                ...options,
+                headers: getAuthHeaders(options.headers || {})
+            });
+
+            if (response.status !== 401) {
+                return response;
+            }
+
+            const authenticated = await ensureAuthenticated(true);
+            if (!authenticated) {
+                return response;
+            }
+
+            return fetch(url, {
+                ...options,
+                headers: getAuthHeaders(options.headers || {})
+            });
+        }
+
         async function loadConfig() {
             try {
-                const response = await fetch('/api/config');
+                updateWeComCallbackUrl();
+                const response = await authFetch('/api/config');
                 const data = await response.json();
                 if (data.status === 'success') {
                     document.getElementById('embyHost').value = data.config.emby?.host || '';
@@ -1304,7 +1436,7 @@
                 }
                 
                 // 加载 HDHive 配置
-                const hdhiveRes = await fetch('/api/hdhive/config');
+                const hdhiveRes = await authFetch('/api/hdhive/config');
                 const hdhiveData = await hdhiveRes.json();
                 if (hdhiveData.status === 'success') {
                     const hc = hdhiveData.config;
@@ -1318,9 +1450,36 @@
                     document.getElementById('hdhiveProxyPass').value = '';
                     document.getElementById('hdhiveMaxPoints').value = hc.settings?.max_points_per_unlock || 50;
                 }
+
+                const wecomRes = await authFetch('/api/wecom/config');
+                const wecomData = await wecomRes.json();
+                if (wecomData.status === 'success') {
+                    const wc = wecomData.config;
+                    document.getElementById('wecomEnabled').checked = wc.enabled || false;
+                    document.getElementById('wecomCorpId').value = wc.corp_id || '';
+                    document.getElementById('wecomAgentId').value = wc.agent_id || '';
+                    document.getElementById('wecomCorpSecret').value = wc.corp_secret || '';
+                    document.getElementById('wecomToken').value = wc.token || '';
+                    document.getElementById('wecomEncodingAesKey').value = wc.encoding_aes_key || '';
+                    document.getElementById('wecomBaseUrl').value = wc.base_url || 'https://qyapi.weixin.qq.com/cgi-bin';
+                }
             } catch (error) {
                 console.error('加载配置失败:', error);
             }
+        }
+
+        function updateWeComCallbackUrl() {
+            const callbackInput = document.getElementById('wecomCallbackUrl');
+            if (!callbackInput) return;
+            callbackInput.value = `${window.location.origin}/api/wecom/callback`;
+        }
+
+        function showConfigStatus(elId, type, html) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.style.display = 'block';
+            el.style.background = type === 'success' ? '#1a3a1a' : type === 'loading' ? '#1a1a2e' : '#3a1a1a';
+            el.innerHTML = html;
         }
 
         window.saveConfig = async function(e) {
@@ -1334,10 +1493,11 @@
                 return;
             }
             
-            // 后端期望扁平结构：host, api_key, moviepilot
             const config = {
-                host: embyHost,
-                api_key: embyApiKey,
+                emby: {
+                    host: embyHost,
+                    api_key: embyApiKey
+                },
                 moviepilot: {
                     host: document.getElementById('mpHost').value.trim(),
                     username: document.getElementById('mpUsername').value.trim(),
@@ -1349,13 +1509,18 @@
                     enabled: false,
                     selected_ids: []
                 },
+                tmdb: {
+                    enabled: !!document.getElementById('tmdbApiKey').value.trim(),
+                    api_key: document.getElementById('tmdbApiKey').value.trim()
+                },
                 detection: {
-                    interval_minutes: 60
+                    interval_minutes: 60,
+                    auto_start: true
                 }
             };
 
             try {
-                const response = await fetch('/api/config', {
+                const response = await authFetch('/api/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config)
@@ -1382,14 +1547,32 @@
                     }
                 };
                 
-                await fetch('/api/hdhive/config', {
+                await authFetch('/api/hdhive/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(hdhiveConfig)
                 });
+
+                const wecomConfig = {
+                    enabled: document.getElementById('wecomEnabled').checked,
+                    corp_id: document.getElementById('wecomCorpId').value.trim(),
+                    agent_id: parseInt(document.getElementById('wecomAgentId').value) || 0,
+                    corp_secret: document.getElementById('wecomCorpSecret').value.trim(),
+                    token: document.getElementById('wecomToken').value.trim(),
+                    encoding_aes_key: document.getElementById('wecomEncodingAesKey').value.trim(),
+                    base_url: document.getElementById('wecomBaseUrl').value.trim() || 'https://qyapi.weixin.qq.com/cgi-bin'
+                };
+
+                const wecomResp = await authFetch('/api/wecom/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(wecomConfig)
+                });
+                const wecomData = await wecomResp.json();
                 
                 if (data.status === 'success' || response.ok) {
-                    alert('✅ 配置已保存！\n\nEmby: ' + embyHost + '\nMoviePilot: ' + config.moviepilot.host);
+                    const wecomLine = wecomData?.test_result ? ('\n企业微信: ' + wecomData.test_result) : '';
+                    alert('✅ 配置已保存！\n\nEmby: ' + embyHost + '\nMoviePilot: ' + config.moviepilot.host + wecomLine);
                 } else {
                     alert('保存失败：' + (data.detail || data.message || '未知错误'));
                 }
@@ -1399,30 +1582,48 @@
         }
         
         window.testHdhiveConnection = async function() {
-            const statusDiv = document.getElementById('hdhiveStatus');
-            statusDiv.style.display = 'block';
-            statusDiv.style.background = '#1a1a2e';
-            statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 测试连接中...';
+            showConfigStatus('hdhiveStatus', 'loading', '<i class="fas fa-spinner fa-spin"></i> 测试连接中...');
             
             try {
-                const response = await fetch('/api/hdhive/status');
+                const response = await authFetch('/api/hdhive/status');
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    statusDiv.style.background = '#1a3a1a';
-                    statusDiv.innerHTML = `
+                    showConfigStatus('hdhiveStatus', 'success', `
                         <p style="color: #4ade80;"><i class="fas fa-check-circle"></i> 连接成功！</p>
                         <p>用户: ${data.user?.nickname || '未知'}</p>
                         <p>积分: ${data.user?.points || 0}</p>
                         <p>VIP: ${data.user?.is_vip ? '是' : '否'}</p>
-                    `;
+                    `);
                 } else {
-                    statusDiv.style.background = '#3a1a1a';
-                    statusDiv.innerHTML = `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> ${data.message || '连接失败'}</p>`;
+                    showConfigStatus('hdhiveStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> ${data.message || '连接失败'}</p>`);
                 }
             } catch (error) {
-                statusDiv.style.background = '#3a1a1a';
-                statusDiv.innerHTML = `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> 连接失败: ${error.message}</p>`;
+                showConfigStatus('hdhiveStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> 连接失败: ${error.message}</p>`);
+            }
+        }
+
+        window.testWeComConnection = async function() {
+            showConfigStatus('wecomStatus', 'loading', '<i class="fas fa-spinner fa-spin"></i> 测试企业微信连接中...');
+
+            try {
+                const response = await authFetch('/api/wecom/status');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    const callbackReady = data.callback_ready ? '已配置' : '未配置';
+                    const sendReady = data.send_ready ? '已配置' : '未配置';
+                    showConfigStatus('wecomStatus', 'success', `
+                        <p style="color: #4ade80;"><i class="fas fa-check-circle"></i> ${data.message || '企业微信可用'}</p>
+                        <p>回调验签: ${callbackReady}</p>
+                        <p>主动发送: ${sendReady}</p>
+                        <p>回调地址: ${document.getElementById('wecomCallbackUrl').value}</p>
+                    `);
+                } else {
+                    showConfigStatus('wecomStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> ${data.message || '连接失败'}</p>`);
+                }
+            } catch (error) {
+                showConfigStatus('wecomStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> 连接失败: ${error.message}</p>`);
             }
         }
 
@@ -1498,6 +1699,7 @@
 
         // ========== 初始化 ==========
         document.addEventListener('DOMContentLoaded', () => {
+            updateWeComCallbackUrl();
             // 加载主题
             if (localStorage.getItem('theme') === 'dark') {
                 document.body.classList.add('dark-mode');
@@ -1523,14 +1725,15 @@
                     e.preventDefault();
                     const seriesId = hdhiveBtn.dataset.seriesId;
                     const seriesName = hdhiveBtn.dataset.seriesName;
-                    searchHdhive(seriesId, seriesName);
+                    const season = hdhiveBtn.dataset.season || 1;
+                    const tmdbId = hdhiveBtn.dataset.tmdbId;
+                    searchHdhive(seriesId, seriesName, tmdbId, season);
                 }
             });
         });
         
         // HDHive 资源搜索
-        async function searchHdhive(seriesId, seriesName) {
-            // 先获取 TMDB ID
+        async function searchHdhive(seriesId, seriesName, tmdbId, season) {
             const statusDiv = document.createElement('div');
             statusDiv.className = 'modal';
             statusDiv.id = 'hdhiveModal';
@@ -1539,21 +1742,24 @@
                 <div class="modal-content" style="background:#1a1a2e;padding:20px;border-radius:12px;max-width:600px;max-height:80vh;overflow-y:auto;position:relative;">
                     <button onclick="document.getElementById('hdhiveModal').remove()" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#888;font-size:20px;cursor:pointer;">&times;</button>
                     <h3 style="color:#667eea;margin-bottom:15px;"><i class="fas fa-hive"></i> 查询 HDHive 资源</h3>
-                    <p style="color:#888;">剧集: ${seriesName}</p>
+                    <p style="color:#888;">剧集：${seriesName}</p>
                     <div id="hdhiveResult" style="margin-top:15px;"><i class="fas fa-spinner fa-spin"></i> 正在搜索...</div>
                 </div>
             `;
             document.body.appendChild(statusDiv);
             
             try {
-                // 直接用剧集名称搜索 TMDB
-                const searchUrl = `https://api.themoviedb.org/3/search/tv?api_key=YOUR_TMDB_KEY&query=${encodeURIComponent(seriesName)}`;
+                let finalTmdbId = tmdbId;
                 
-                // 使用后端代理搜索
-                const tmdbRes = await fetch(`/api/tmdb/search?name=${encodeURIComponent(seriesName)}`);
-                const tmdbData = await tmdbRes.json();
+                // 如果没有 TMDB ID，尝试从后端获取
+                if (!finalTmdbId && seriesId) {
+                    document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在获取 TMDB ID...`;
+                    const tmdbRes = await fetch(`/api/tmdb/${seriesId}`);
+                    const tmdbData = await tmdbRes.json();
+                    finalTmdbId = tmdbData.tmdb_id;
+                }
                 
-                if (!tmdbData.tmdb_id) {
+                if (!finalTmdbId) {
                     document.getElementById('hdhiveResult').innerHTML = `
                         <p style="color:#fbbf24;">⚠️ 无法获取 TMDB ID</p>
                         <p style="color:#888;font-size:13px;">该剧可能在 Emby 中未正确刮削元数据</p>
@@ -1562,17 +1768,16 @@
                     return;
                 }
                 
-                document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在搜索 HDHive 资源... (TMDB: ${tmdbData.tmdb_id})`;
+                document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在搜索 HDHive 资源... (TMDB: ${finalTmdbId})`;
                 
                 // 搜索 HDHive 资源
-                const searchRes = await fetch(`/api/hdhive/search?tmdb_id=${tmdbData.tmdb_id}`);
+                const searchRes = await authFetch(`/api/hdhive/search?series_id=${encodeURIComponent(seriesId)}&tmdb_id=${finalTmdbId}&season=${season}`);
                 const searchData = await searchRes.json();
                 
                 if (searchData.status !== 'success' || !searchData.resources?.length) {
                     document.getElementById('hdhiveResult').innerHTML = `
                         <p style="color:#fbbf24;">📭 HDHive 暂无此剧资源</p>
-                        <p style="color:#888;font-size:13px;">TMDB ID: ${tmdbData.tmdb_id}</p>
-                        <p style="color:#888;font-size:12px;">提示：HDHive 主要收录热门剧集，部分剧集可能没有资源</p>
+                        <p style="color:#888;font-size:13px;">TMDB ID: ${finalTmdbId}</p>
                         <button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="document.getElementById('hdhiveModal').remove()">关闭</button>
                     `;
                     return;
@@ -1583,28 +1788,22 @@
                 html += '<div style="max-height:400px;overflow-y:auto;">';
                 
                 searchData.resources.forEach(r => {
-                    const is115 = r.title?.toLowerCase().includes('115') || r.title?.includes('115网盘');
-                    html += `
-                        <div style="background:#0a0a1a;padding:12px;border-radius:8px;margin-bottom:10px;cursor:pointer;" 
-                             onclick="unlockHdhiveResource('${r.slug}', '${r.title?.replace(/'/g, "\\'") || '未知'}', ${r.unlock_points}, this)">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                                <span style="font-weight:bold;color:#fff;">${r.title || '未知标题'}</span>
-                                ${is115 ? '<span style="background:#667eea;padding:2px 8px;border-radius:4px;font-size:12px;">115</span>' : ''}
-                            </div>
-                            <div style="display:flex;gap:15px;color:#888;font-size:13px;">
-                                <span><i class="fas fa-hdd"></i> ${r.share_size || '未知'}</span>
-                                <span><i class="fas fa-video"></i> ${(r.video_resolution || []).join(', ')}</span>
-                                <span style="color:${r.unlock_points === 0 ? '#4ade80' : '#fbbf24'};">
-                                    <i class="fas fa-coins"></i> ${r.unlock_points || 0} 积分
-                                </span>
-                            </div>
-                            ${r.is_unlocked ? '<div style="color:#4ade80;margin-top:5px;font-size:12px;"><i class="fas fa-check"></i> 已解锁</div>' : ''}
+                    const is115 = r.title?.toLowerCase().includes('115') || r.title?.includes('115 网盘');
+                    html += `<div style="background:#0a0a1a;padding:12px;border-radius:8px;margin-bottom:10px;cursor:pointer;" onclick="unlockHdhiveResource('${r.slug}', '${r.title?.replace(/'/g, "\\'") || '未知'}', ${r.unlock_points}, this)">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                            <span style="font-weight:bold;color:#fff;">${r.title || '未知标题'}</span>
+                            ${is115 ? '<span style="background:#667eea;padding:2px 8px;border-radius:4px;font-size:12px;">115</span>' : ''}
                         </div>
-                    `;
+                        <div style="display:flex;gap:15px;color:#888;font-size:13px;">
+                            <span><i class="fas fa-hdd"></i> ${r.share_size || '未知'}</span>
+                            <span><i class="fas fa-video"></i> ${(r.video_resolution || []).join(', ')}</span>
+                            <span style="color:${r.unlock_points === 0 ? '#4ade80' : '#fbbf24'};"><i class="fas fa-coins"></i> ${r.unlock_points || 0} 积分</span>
+                        </div>
+                        ${r.is_unlocked ? '<div style="color:#4ade80;margin-top:5px;font-size:12px;"><i class="fas fa-check"></i> 已解锁</div>' : ''}
+                    </div>`;
                 });
                 html += '</div>';
                 html += '<button class="btn btn-outline" style="margin-top:15px;width:100%;" onclick="this.closest(\'.modal\').remove()">关闭</button>';
-                
                 document.getElementById('hdhiveResult').innerHTML = html;
                 
             } catch (error) {
@@ -1646,7 +1845,7 @@
             elem.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 解锁中...';
             
             try {
-                const res = await fetch('/api/hdhive/unlock', {
+                const res = await authFetch('/api/hdhive/unlock', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ slug })

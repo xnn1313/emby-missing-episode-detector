@@ -22,7 +22,9 @@ start() {
     
     cd "$SCRIPT_DIR"
     echo "🚀 启动服务..."
-    nohup python3 -m uvicorn main:app --host 0.0.0.0 --port $PORT > "$LOG_FILE" 2>&1 &
+    echo "" >> "$LOG_FILE"
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') start =====" >> "$LOG_FILE"
+    nohup python3 -m uvicorn main:app --host 0.0.0.0 --port $PORT >> "$LOG_FILE" 2>&1 &
     PID=$!
     echo $PID > "$PID_FILE"
     
@@ -38,33 +40,33 @@ start() {
 }
 
 stop() {
+    # 先清理所有占用端口的进程
+    PIDS=$(lsof -t -i:$PORT 2>/dev/null)
+    if [ -n "$PIDS" ]; then
+        echo "⏹️  清理端口 $PORT 占用的进程..."
+        echo "$PIDS" | xargs kill -9 2>/dev/null
+        sleep 2
+    fi
+    
     if [ -f "$PID_FILE" ]; then
         PID=$(cat "$PID_FILE")
         if ps -p "$PID" > /dev/null 2>&1; then
             echo "⏹️  停止服务 (PID: $PID)..."
-            kill "$PID" 2>/dev/null
-            sleep 2
-            if ps -p "$PID" > /dev/null 2>&1; then
-                kill -9 "$PID" 2>/dev/null
-            fi
-            rm -f "$PID_FILE"
-            echo "✅ 服务已停止"
-        else
-            echo "⚠️  服务未运行，清理 PID 文件"
-            rm -f "$PID_FILE"
-        fi
-    else
-        # 尝试通过端口查找进程
-        PID=$(lsof -t -i:$PORT 2>/dev/null | head -1)
-        if [ -n "$PID" ]; then
-            echo "⏹️  停止服务 (端口：$PORT, PID: $PID)..."
-            kill "$PID" 2>/dev/null
+            kill -9 "$PID" 2>/dev/null
             sleep 1
-            echo "✅ 服务已停止"
-        else
-            echo "⚠️  服务未运行"
         fi
+        rm -f "$PID_FILE"
     fi
+    
+    # 再次确认端口已释放
+    PIDS=$(lsof -t -i:$PORT 2>/dev/null)
+    if [ -n "$PIDS" ]; then
+        echo "⚠️  强制清理残留进程..."
+        echo "$PIDS" | xargs kill -9 2>/dev/null
+        sleep 2
+    fi
+    
+    echo "✅ 服务已停止"
 }
 
 restart() {

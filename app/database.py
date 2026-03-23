@@ -13,6 +13,8 @@ from pathlib import Path
 from loguru import logger
 from contextlib import contextmanager
 
+project_root = Path(__file__).parent.parent
+
 
 class Database:
     """SQLite 数据库管理类"""
@@ -143,6 +145,32 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
+            # 企业微信会话表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS wecom_sessions (
+                    user_id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # 企业微信消息去重表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS wecom_messages (
+                    dedupe_key TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    msg_type TEXT,
+                    msg_id TEXT,
+                    content TEXT,
+                    status TEXT DEFAULT 'processing',
+                    response_text TEXT,
+                    delivery_mode TEXT,
+                    error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
             
             # 创建索引
             # 设置 WAL 模式和并发优化
@@ -158,6 +186,9 @@ class Database:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_series_season ON download_history(series_id, season_number)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_hdhive_slug ON hdhive_unlocks(slug)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_hdhive_series ON hdhive_unlocks(series_id, season)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_wecom_session_updated_at ON wecom_sessions(updated_at)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_wecom_messages_created_at ON wecom_messages(created_at)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_wecom_messages_status ON wecom_messages(status)')
             
             conn.commit()
             logger.info("数据库表结构已初始化")
@@ -283,7 +314,8 @@ class Database:
     
     def save_download_history(self, series_id: str, series_name: str,
                              season_number: int, episode_numbers: List[int],
-                             moviepilot_task_id: Optional[str] = None) -> int:
+                             moviepilot_task_id: Optional[str] = None,
+                             status: Optional[str] = None) -> int:
         """
         保存下载历史记录
         
@@ -293,23 +325,28 @@ class Database:
             season_number: 季数
             episode_numbers: 缺失集数列表
             moviepilot_task_id: MoviePilot 任务 ID
+            status: 下载状态，未传时根据 moviepilot_task_id 推断
         
         Returns:
             记录 ID
         """
+        final_status = status or ('pending' if moviepilot_task_id else 'failed')
+        completed_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S') if final_status == 'completed' else None
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO download_history 
-                (series_id, series_name, season_number, episode_numbers, moviepilot_task_id, status)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (series_id, series_name, season_number, episode_numbers, moviepilot_task_id, status, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 series_id,
                 series_name,
                 season_number,
                 json.dumps(episode_numbers),
                 moviepilot_task_id,
-                'pending' if moviepilot_task_id else 'failed'
+                final_status,
+                completed_at
             ))
             conn.commit()
             return cursor.lastrowid
@@ -332,15 +369,15 @@ class Database:
             if task_id:
                 cursor.execute('''
                     UPDATE download_history 
-                    SET status = ?, moviepilot_task_id = ?
+                    SET status = ?, moviepilot_task_id = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
                     WHERE id = ?
-                ''', (status, task_id, record_id))
+                ''', (status, task_id, status, record_id))
             else:
                 cursor.execute('''
                     UPDATE download_history 
-                    SET status = ?
+                    SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END
                     WHERE id = ?
-                ''', (status, record_id))
+                ''', (status, status, record_id))
             conn.commit()
             return cursor.rowcount > 0
     
@@ -560,6 +597,121 @@ class Database:
     def is_hdhive_unlocked(self, slug: str) -> bool:
         """检查资源是否已解锁"""
         return self.get_hdhive_unlock_by_slug(slug) is not None
+
+    # ==================== 企业微信会话与消息去重 ====================
+
+    def save_wecom_session(self, user_id: str, payload: Dict[str, Any]) -> bool:
+        """保存企业微信会话"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO wecom_sessions (user_id, payload, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    payload = excluded.payload,
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (user_id, json.dumps(payload, ensure_ascii=False)))
+            conn.commit()
+            return True
+
+    def get_wecom_session(self, user_id: str, ttl_seconds: int) -> Optional[Dict[str, Any]]:
+        """读取企业微信会话，超时后自动清理"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT payload, updated_at
+                FROM wecom_sessions
+                WHERE user_id = ?
+            ''', (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            updated_at = row["updated_at"]
+            if isinstance(updated_at, datetime):
+                updated_dt = updated_at
+            else:
+                updated_dt = datetime.fromisoformat(str(updated_at).replace(" ", "T"))
+
+            if (datetime.now() - updated_dt).total_seconds() > ttl_seconds:
+                cursor.execute('DELETE FROM wecom_sessions WHERE user_id = ?', (user_id,))
+                conn.commit()
+                return None
+
+            return json.loads(row["payload"])
+
+    def delete_wecom_session(self, user_id: str) -> bool:
+        """删除企业微信会话"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM wecom_sessions WHERE user_id = ?', (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def reserve_wecom_message(
+        self,
+        dedupe_key: str,
+        user_id: str = "",
+        msg_type: str = "",
+        msg_id: str = "",
+        content: str = "",
+    ) -> Dict[str, Any]:
+        """预留企业微信消息记录，用于幂等控制"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR IGNORE INTO wecom_messages
+                (dedupe_key, user_id, msg_type, msg_id, content, status, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'processing', CURRENT_TIMESTAMP)
+            ''', (dedupe_key, user_id, msg_type, msg_id, content))
+            created = cursor.rowcount == 1
+
+            cursor.execute('SELECT * FROM wecom_messages WHERE dedupe_key = ?', (dedupe_key,))
+            row = cursor.fetchone()
+            conn.commit()
+
+            return {
+                "created": created,
+                "record": dict(row) if row else None,
+            }
+
+    def complete_wecom_message(self, dedupe_key: str, response_text: str, delivery_mode: str) -> bool:
+        """将企业微信消息标记为已完成"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE wecom_messages
+                SET status = 'completed',
+                    response_text = ?,
+                    delivery_mode = ?,
+                    error_message = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE dedupe_key = ?
+            ''', (response_text, delivery_mode, dedupe_key))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def fail_wecom_message(self, dedupe_key: str, error_message: str) -> bool:
+        """将企业微信消息标记为失败"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE wecom_messages
+                SET status = 'failed',
+                    error_message = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE dedupe_key = ?
+            ''', (error_message, dedupe_key))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_wecom_message(self, dedupe_key: str) -> Optional[Dict[str, Any]]:
+        """获取企业微信消息记录"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM wecom_messages WHERE dedupe_key = ?', (dedupe_key,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
     
     def export_to_csv(self, output_path: str) -> int:
         """

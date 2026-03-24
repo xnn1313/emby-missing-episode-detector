@@ -887,7 +887,8 @@
                     filteredData = cardsData.cards;
                     hasMore = pagination.has_more || false;
                     
-                    updateStats(cardsData.cards);
+                    // 使用分页总数更新统计（而不是当前页数据）
+                    updateStatsWithPagination(cardsData.cards, pagination);
                     renderCards(cardsData.cards, grid);
                     
                     // 添加滚动监听
@@ -915,7 +916,7 @@
         }
 
         function updateStats(cards) {
-            // 统计 unique 剧集数
+            // 统计 unique 剧集数（仅用于单页数据）
             const uniqueSeries = new Set(cards.map(c => c.series_id));
             const total = uniqueSeries.size;
             const missing = cards.length;
@@ -934,6 +935,37 @@
             updateSeasonFilter(cards);
             
             console.log('Stats:', { total, missing, episodes, cardsCount: cards.length });
+        }
+        
+        function updateStatsWithPagination(cards, pagination) {
+            // 使用分页总数更新统计
+            const total = pagination.total || cards.length;
+            const missing = pagination.total || cards.length; // 所有返回的都是有缺集的
+            
+            // 计算缺失总集数（需要累加所有页，暂时用当前页估算）
+            const episodes = cards.reduce((sum, c) => {
+                const count = Array.isArray(c.missing_episodes) ? c.missing_episodes.length : 0;
+                return sum + count;
+            }, 0);
+            
+            // 如果有分页信息，估算总缺集数
+            if (pagination.total && pagination.page && pagination.page_size) {
+                const avgMissingPerCard = episodes / cards.length;
+                const estimatedTotal = Math.round(avgMissingPerCard * pagination.total);
+                document.getElementById('statEpisodes').textContent = estimatedTotal;
+                console.log('估算总缺集数:', estimatedTotal, '(基于当前页平均值)');
+            } else {
+                document.getElementById('statEpisodes').textContent = episodes;
+            }
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statMissing').textContent = missing;
+            document.getElementById('missingBadge').textContent = missing;
+            
+            // 动态生成季筛选选项
+            updateSeasonFilter(cards);
+            
+            console.log('Stats (with pagination):', { total, missing, episodes, pagination });
         }
         
         function updateSeasonFilter(cards) {
@@ -1033,8 +1065,8 @@
                                        </button>`
                             }
                         </div>
-                        <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-tmdb-id="${card.tmdb_id || ''}" title="查询 HDHive 资源">
-                            <i class="fas fa-hive"></i> 查询 HDHive
+                        <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;justify-content:center;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-tmdb-id="${card.tmdb_id || ''}" title="查询 HDHive 资源">
+                            <i class="fas fa-search"></i> 查询 HDHive
                         </button>
                     </div>
                 </div>
@@ -1140,8 +1172,8 @@
                                             : `<button class="btn btn-primary download-btn" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-season="${card.season || 1}"><i class="fas fa-download"></i> 推送下载</button>`
                                     }
                                 </div>
-                                <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-tmdb-id="${card.tmdb_id || ''}" title="查询 HDHive 资源">
-                                    <i class="fas fa-hive"></i> 查询 HDHive
+                                <button class="btn btn-outline hdhive-btn" style="width:100%;margin-top:8px;justify-content:center;" data-series-id="${card.series_id || ''}" data-series-name="${(card.series_name || '').replace(/"/g, '&quot;')}" data-tmdb-id="${card.tmdb_id || ''}" title="查询 HDHive 资源">
+                                    <i class="fas fa-search"></i> 查询 HDHive
                                 </button>
                             </div>
                         </div>`;
@@ -1788,11 +1820,31 @@
                 html += '<div style="max-height:400px;overflow-y:auto;">';
                 
                 searchData.resources.forEach(r => {
-                    const is115 = r.title?.toLowerCase().includes('115') || r.title?.includes('115 网盘');
+                    // 获取网盘类型
+                    const panType = r.pan_type || '';
+                    const is115 = panType === '115' || (r.title && r.title.toLowerCase().includes('115'));
+                    const isAli = panType === 'ali' || panType === 'aliyun' || (r.title && r.title.toLowerCase().includes('阿里'));
+                    const isQuark = panType === 'quark' || (r.title && r.title.toLowerCase().includes('夸克'));
+                    const isBaidu = panType === 'baidu' || (r.title && r.title.toLowerCase().includes('百度'));
+                    
+                    // 网盘标志 HTML
+                    let panBadge = '';
+                    if (is115) {
+                        panBadge = '<span style="background:#667eea;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">115</span>';
+                    } else if (isAli) {
+                        panBadge = '<span style="background:#00c853;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#fff;">阿里云盘</span>';
+                    } else if (isQuark) {
+                        panBadge = '<span style="background:#00d9ff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#000;">夸克</span>';
+                    } else if (isBaidu) {
+                        panBadge = '<span style="background:#29b6f6;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#fff;">百度网盘</span>';
+                    } else if (panType) {
+                        panBadge = `<span style="background:#888;padding:2px 8px;border-radius:4px;font-size:12px;">${panType}</span>`;
+                    }
+                    
                     html += `<div style="background:#0a0a1a;padding:12px;border-radius:8px;margin-bottom:10px;cursor:pointer;" onclick="unlockHdhiveResource('${r.slug}', '${r.title?.replace(/'/g, "\\'") || '未知'}', ${r.unlock_points}, this)">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                             <span style="font-weight:bold;color:#fff;">${r.title || '未知标题'}</span>
-                            ${is115 ? '<span style="background:#667eea;padding:2px 8px;border-radius:4px;font-size:12px;">115</span>' : ''}
+                            ${panBadge}
                         </div>
                         <div style="display:flex;gap:15px;color:#888;font-size:13px;">
                             <span><i class="fas fa-hdd"></i> ${r.share_size || '未知'}</span>

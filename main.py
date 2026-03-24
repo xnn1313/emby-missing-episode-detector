@@ -1436,7 +1436,8 @@ async def search_hdhive_resources(series_id: str = None, tmdb_id: str = None, se
                 "unlock_points": r.get("unlock_points") or 0,
                 "is_unlocked": r.get("is_unlocked", False),
                 "validate_status": r.get("validate_status"),
-                "is_official": r.get("is_official", False)
+                "is_official": r.get("is_official", False),
+                "pan_type": r.get("pan_type")  # 添加网盘类型字段
             })
         
         return {

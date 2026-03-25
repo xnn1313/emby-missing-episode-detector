@@ -748,7 +748,6 @@
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
                     <button class="btn btn-outline" id="cfgTab-emby" onclick="showConfigTab('emby')"><i class="fas fa-tv"></i> Emby</button>
                     <button class="btn btn-outline" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
-                    <button class="btn btn-outline" id="cfgTab-hdhive" onclick="showConfigTab('hdhive')"><i class="fas fa-hive"></i> HDHive</button>
                     <button class="btn btn-outline" id="cfgTab-wecom" onclick="showConfigTab('wecom')"><i class="fas fa-building"></i> 企业微信</button>
                     <button class="btn btn-outline" id="cfgTab-global" onclick="showConfigTab('global')"><i class="fas fa-globe"></i> 全局</button>
                     <div style="margin-left:auto;">
@@ -784,7 +783,7 @@
                             <input type="password" id="mpPassword" class="filter-select" style="width: 100%;">
                         </div>
                     </div>
-                    <div class="config-section" id="cfgSection-hdhive">
+                    <div class="config-section" id="cfgSection-hdhive" style="display:none;">
                         <div class="form-group">
                             <label>HDHive API Key</label>
                             <input type="password" id="hdhiveApiKey" class="filter-select" style="width: 100%;" placeholder="在 HDHive 设置中获取 API Key">
@@ -1736,6 +1735,14 @@
                     document.getElementById('hdhiveProxyUser').value = hc.proxy?.username || '';
                     document.getElementById('hdhiveProxyPass').value = '';
                     document.getElementById('hdhiveMaxPoints').value = hc.settings?.max_points_per_unlock || 50;
+                    const gpEnabled = document.getElementById('globalProxyEnabled');
+                    const gpHost = document.getElementById('globalProxyHost');
+                    const gpPort = document.getElementById('globalProxyPort');
+                    const gpUser = document.getElementById('globalProxyUser');
+                    if (gpEnabled) gpEnabled.checked = hc.proxy?.enabled || false;
+                    if (gpHost) gpHost.value = hc.proxy?.host || '';
+                    if (gpPort) gpPort.value = hc.proxy?.port || '';
+                    if (gpUser) gpUser.value = hc.proxy?.username || '';
                 }
 
                 const wecomRes = await authFetch('/api/wecom/config');
@@ -2037,10 +2044,10 @@
                     base_url: document.getElementById('hdhiveBaseUrl').value.trim() || 'https://hdhive.com/api/open',
                     enabled: document.getElementById('hdhiveEnabled').checked,
                     proxy: {
-                        enabled: document.getElementById('hdhiveProxyEnabled').checked || document.getElementById('globalProxyEnabled').checked,
-                        host: (document.getElementById('hdhiveProxyHost').value.trim() || document.getElementById('globalProxyHost').value.trim()),
-                        port: (parseInt(document.getElementById('hdhiveProxyPort').value) || parseInt(document.getElementById('globalProxyPort').value) || 0),
-                        username: (document.getElementById('globalProxyUser').value.trim() || document.getElementById('hdhiveProxyUser').value.trim()),
+                        enabled: document.getElementById('globalProxyEnabled').checked,
+                        host: document.getElementById('globalProxyHost').value.trim(),
+                        port: parseInt(document.getElementById('globalProxyPort').value) || 0,
+                        username: document.getElementById('globalProxyUser').value.trim(),
                         password: document.getElementById('hdhiveProxyPass').value.trim()
                     },
                     settings: {
@@ -2110,7 +2117,7 @@
         }
         
         window.showConfigTab = function(name) {
-            const tabs = ['emby','mp','hdhive','wecom','global'];
+            const tabs = ['emby','mp','wecom','global'];
             tabs.forEach(t => {
                 const sec = document.getElementById('cfgSection-' + t);
                 const btn = document.getElementById('cfgTab-' + t);

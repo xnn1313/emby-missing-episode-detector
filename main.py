@@ -1035,7 +1035,7 @@ async def get_tmdb_id(series_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/cards")
-async def get_cards(page: int = 1, page_size: int = 20):
+async def get_cards(page: int = 1, page_size: int = 20, current_user: Dict[str, Any] = Depends(get_current_user)):
     """获取海报墙数据（支持分页）"""
     global last_result, db
     

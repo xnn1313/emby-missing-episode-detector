@@ -454,6 +454,57 @@
         .page { display: none; }
         .page.active { display: block; }
 
+        .login-page {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: var(--bg-body);
+            z-index: 10000;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            padding: 28px;
+        }
+
+        .login-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 18px;
+        }
+
+        .login-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .login-error {
+            margin-top: 12px;
+            color: #f87171;
+            font-size: 13px;
+            display: none;
+            line-height: 1.4;
+        }
+
         /* 响应式 */
         @media (max-width: 768px) {
             .sidebar {
@@ -485,6 +536,35 @@
     </style>
 </head>
 <body>
+    <div id="loginPage" class="login-page">
+        <div class="login-card">
+            <div class="login-title"><i class="fas fa-user-lock"></i> 登录</div>
+            <div class="login-subtitle">用户名密码</div>
+
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="loginUsername" class="filter-select" style="width: 100%;" autocomplete="username" value="admin">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="loginPassword" class="filter-select" style="width: 100%;" autocomplete="current-password">
+                <div style="color:#888;font-size:12px;margin-top:6px;">默认账号：admin / password</div>
+            </div>
+
+            <div class="login-actions">
+                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="submitLogin()">
+                    <i class="fas fa-sign-in-alt"></i>
+                    登录
+                </button>
+                <button class="btn btn-outline" style="justify-content:center;" onclick="clearLoginForm()">
+                    清空
+                </button>
+            </div>
+            <div id="loginError" class="login-error"></div>
+        </div>
+    </div>
+
+    <div id="appShell" style="display:flex; width:100%;">
     <!-- 移动端菜单按钮 -->
     <button class="mobile-menu-btn" onclick="toggleSidebar()">
         <i class="fas fa-bars"></i>
@@ -530,6 +610,10 @@
             <a class="nav-item" onclick="toggleTheme()">
                 <i class="fas fa-moon"></i>
                 <span>暗黑模式</span>
+            </a>
+            <a class="nav-item" onclick="logout()">
+                <i class="fas fa-right-from-bracket"></i>
+                <span>退出登录</span>
             </a>
             <a class="nav-item" href="https://github.com/xnn1313/emby-missing-episode-detector" target="_blank">
                 <i class="fab fa-github"></i>
@@ -865,6 +949,7 @@
             </div>
         </div>
     </main>
+    </div>
 
     <script>
         // ========== 全局状态 ==========
@@ -903,6 +988,11 @@
             if (pageId === 'config') loadConfig();
             if (pageId === 'history') loadHistory();
             if (pageId === 'hdhive') loadHdhiveSearch();
+
+            const nextHash = pageId ? `#/${pageId}` : '#/dashboard';
+            if (window.location.hash !== nextHash) {
+                window.location.hash = nextHash;
+            }
         }
 
         window.toggleSidebar = function() {
@@ -1434,6 +1524,9 @@
         }
 
         const AUTH_TOKEN_KEY = 'emby_detector_auth_token';
+        const LOGIN_HASH = '#/login';
+        let pendingLoginPromise = null;
+        let pendingLoginResolve = null;
 
         function getAuthHeaders(extraHeaders = {}) {
             const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -1446,44 +1539,80 @@
             };
         }
 
-        async function ensureAuthenticated(forcePrompt = false) {
-            const token = localStorage.getItem(AUTH_TOKEN_KEY);
-
-            if (token && !forcePrompt) {
-                const meResponse = await fetch('/api/auth/me', {
-                    headers: getAuthHeaders()
-                });
-                if (meResponse.ok) {
-                    return true;
+        function showLoginPage(message) {
+            const loginPage = document.getElementById('loginPage');
+            const appShell = document.getElementById('appShell');
+            const errorEl = document.getElementById('loginError');
+            if (loginPage) loginPage.style.display = 'flex';
+            if (appShell) appShell.style.display = 'none';
+            if (errorEl) {
+                if (message) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = String(message);
+                } else {
+                    errorEl.style.display = 'none';
+                    errorEl.textContent = '';
                 }
-                localStorage.removeItem(AUTH_TOKEN_KEY);
             }
-
-            const username = window.prompt('请输入管理员用户名', 'admin');
-            if (!username) {
-                return false;
+            const pwd = document.getElementById('loginPassword');
+            if (pwd) {
+                pwd.value = '';
+                pwd.focus();
             }
+        }
 
-            const password = window.prompt('请输入管理员密码');
-            if (password === null) {
-                return false;
+        function showAppShell() {
+            const loginPage = document.getElementById('loginPage');
+            const appShell = document.getElementById('appShell');
+            if (loginPage) loginPage.style.display = 'none';
+            if (appShell) appShell.style.display = 'flex';
+        }
+
+        window.clearLoginForm = function() {
+            const user = document.getElementById('loginUsername');
+            const pwd = document.getElementById('loginPassword');
+            const errorEl = document.getElementById('loginError');
+            if (user) user.value = 'admin';
+            if (pwd) pwd.value = '';
+            if (errorEl) {
+                errorEl.style.display = 'none';
+                errorEl.textContent = '';
             }
+        }
 
-            const loginResponse = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+        function waitForLogin() {
+            if (pendingLoginPromise) {
+                return pendingLoginPromise;
+            }
+            pendingLoginPromise = new Promise((resolve) => {
+                pendingLoginResolve = resolve;
             });
+            return pendingLoginPromise;
+        }
 
-            if (!loginResponse.ok) {
-                localStorage.removeItem(AUTH_TOKEN_KEY);
-                alert('登录失败，请检查用户名和密码');
+        async function validateToken() {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token) {
                 return false;
             }
+            const meResponse = await fetch('/api/auth/me', {
+                headers: getAuthHeaders()
+            });
+            if (meResponse.ok) {
+                return true;
+            }
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            return false;
+        }
 
-            const loginData = await loginResponse.json();
-            localStorage.setItem(AUTH_TOKEN_KEY, loginData.access_token);
-            return true;
+        async function ensureAuthenticated(forcePrompt = false) {
+            const ok = await validateToken();
+            if (ok && !forcePrompt) {
+                return true;
+            }
+            location.hash = LOGIN_HASH;
+            showLoginPage('请先登录');
+            return await waitForLogin();
         }
 
         async function authFetch(url, options = {}) {
@@ -1505,6 +1634,62 @@
                 ...options,
                 headers: getAuthHeaders(options.headers || {})
             });
+        }
+
+        window.submitLogin = async function() {
+            const username = (document.getElementById('loginUsername')?.value || '').trim();
+            const password = document.getElementById('loginPassword')?.value ?? '';
+            const errorEl = document.getElementById('loginError');
+            if (errorEl) {
+                errorEl.style.display = 'none';
+                errorEl.textContent = '';
+            }
+
+            if (!username || password === '') {
+                if (errorEl) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = '请输入用户名和密码';
+                }
+                return;
+            }
+
+            try {
+                const loginResponse = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (!loginResponse.ok) {
+                    localStorage.removeItem(AUTH_TOKEN_KEY);
+                    const data = await loginResponse.json().catch(() => ({}));
+                    const msg = data?.detail || data?.message || '登录失败，请检查用户名和密码';
+                    if (errorEl) {
+                        errorEl.style.display = 'block';
+                        errorEl.textContent = msg;
+                    }
+                    return;
+                }
+
+                const loginData = await loginResponse.json();
+                localStorage.setItem(AUTH_TOKEN_KEY, loginData.access_token);
+                showAppShell();
+                if (location.hash === LOGIN_HASH) {
+                    location.hash = '#/dashboard';
+                }
+                if (pendingLoginResolve) {
+                    pendingLoginResolve(true);
+                }
+            } finally {
+                pendingLoginPromise = null;
+                pendingLoginResolve = null;
+            }
+        }
+
+        window.logout = function() {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            location.hash = LOGIN_HASH;
+            showLoginPage();
         }
 
         async function loadConfig() {
@@ -2013,8 +2198,46 @@
                 document.body.classList.add('dark-mode');
             }
 
-            // 加载仪表盘
-            loadDashboard();
+            const loginPwd = document.getElementById('loginPassword');
+            if (loginPwd) {
+                loginPwd.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitLogin();
+                    }
+                });
+            }
+
+            async function route() {
+                const hash = window.location.hash || '';
+                if (hash === LOGIN_HASH) {
+                    showLoginPage();
+                    return;
+                }
+
+                const ok = await validateToken();
+                if (!ok) {
+                    location.hash = LOGIN_HASH;
+                    showLoginPage();
+                    return;
+                }
+
+                showAppShell();
+
+                const page = hash.startsWith('#/') ? hash.slice(2) : '';
+                const targetPage = page && page !== 'login' ? page : 'dashboard';
+                const targetEl = document.getElementById('page-' + targetPage);
+                const alreadyActive = targetEl && targetEl.classList.contains('active');
+                if (!alreadyActive) {
+                    showPage(targetPage);
+                }
+            }
+
+            window.addEventListener('hashchange', () => {
+                route();
+            });
+
+            route();
             
             // 事件委托：处理下载按钮点击
             document.getElementById('seriesGrid').addEventListener('click', function(e) {

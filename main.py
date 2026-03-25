@@ -492,14 +492,6 @@ def _process_wecom_message_async(
             current_config_manager=current_config_manager,
         )
 
-        if current_wecom_client.can_send():
-            try:
-                articles = wecom_command_service.build_news_articles(from_user, db=current_db)
-            except Exception:
-                articles = []
-            if articles:
-                current_wecom_client.send_news_message(from_user, articles)
-
         current_wecom_client.send_text_message(from_user, reply_text)
         if current_db is not None:
             current_db.complete_wecom_message(dedupe_key, reply_text, "async")

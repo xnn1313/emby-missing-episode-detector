@@ -66,6 +66,30 @@ class TMDBClientTests(unittest.TestCase):
             client.client.calls[1]["headers"]["Authorization"],
         )
 
+    def test_tv_feed_calls_correct_endpoint(self):
+        client = TMDBClient("legacy-v3-key")
+        client.client.close()
+        client.client = FakeHTTPClient(
+            [FakeResponse(200, {"page": 1, "results": [{"id": 1, "name": "A"}], "total_pages": 1})]
+        )
+
+        payload = client.get_tv_feed("on_the_air", page=1)
+
+        self.assertEqual(1, payload["page"])
+        self.assertEqual("/tv/on_the_air", client.client.calls[0]["path"])
+
+    def test_trending_feed_calls_correct_endpoint(self):
+        client = TMDBClient("legacy-v3-key")
+        client.client.close()
+        client.client = FakeHTTPClient(
+            [FakeResponse(200, {"page": 1, "results": [{"id": 1, "name": "A"}], "total_pages": 1})]
+        )
+
+        client.get_tv_feed("trending_week", page=3)
+
+        self.assertEqual("/trending/tv/week", client.client.calls[0]["path"])
+        self.assertEqual(3, client.client.calls[0]["params"]["page"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -993,6 +993,78 @@ async def search_tmdb_candidates(
     return {"status": "success", "count": len(normalized), "candidates": normalized}
 
 
+@app.get("/api/tmdb/feed")
+async def get_tmdb_feed(
+    feed: str = "on_the_air",
+    page: int = 1,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    global config_manager, tmdb_client
+
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    tmdb_config = config_manager.get_tmdb_config() if config_manager else {}
+    all_config = config_manager.get_all_config() if config_manager else {}
+    tmdb_proxy_url = _build_proxy_url((all_config.get("hdhive") or {}).get("proxy"))
+    tmdb_api_key = (tmdb_config.get("api_key") or "").strip()
+
+    if not tmdb_api_key:
+        raise HTTPException(status_code=400, detail="请先在配置中设置 TMDB API Key")
+
+    safe_page = max(1, min(int(page or 1), 500))
+
+    temp_client: Optional[TMDBClient] = None
+    client = tmdb_client
+    if client is None:
+        temp_client = TMDBClient(api_key=tmdb_api_key, language="zh-CN", proxy_url=tmdb_proxy_url)
+        client = temp_client
+
+    try:
+        payload = client.get_tv_feed(feed=feed, page=safe_page)
+    finally:
+        if temp_client is not None:
+            try:
+                temp_client.client.close()
+            except Exception:
+                pass
+
+    results = payload.get("results") or []
+    total_pages = int(payload.get("total_pages") or 0)
+
+    normalized = []
+    for item in results:
+        poster_path = item.get("poster_path") or ""
+        first_air_date = item.get("first_air_date") or ""
+        normalized.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name") or item.get("original_name") or "",
+                "original_name": item.get("original_name") or "",
+                "first_air_date": first_air_date,
+                "year": first_air_date[:4] if first_air_date else "",
+                "overview": item.get("overview") or "",
+                "poster_url": f"https://image.tmdb.org/t/p/w342{poster_path}" if poster_path else "",
+                "vote_average": item.get("vote_average"),
+                "vote_count": item.get("vote_count"),
+                "popularity": item.get("popularity"),
+                "origin_country": item.get("origin_country") or [],
+            }
+        )
+
+    has_more = total_pages > 0 and safe_page < total_pages
+    return {
+        "status": "success",
+        "feed": feed,
+        "items": normalized,
+        "pagination": {
+            "page": safe_page,
+            "total_pages": total_pages,
+            "has_more": has_more,
+        },
+    }
+
+
 @app.get("/api/tmdb/{series_id}")
 async def get_tmdb_id(series_id: str):
     """获取剧集的 TMDB ID"""

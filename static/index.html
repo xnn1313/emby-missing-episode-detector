@@ -654,6 +654,10 @@
                 <i class="fas fa-history"></i>
                 <span>检测历史</span>
             </a>
+            <a class="nav-item" onclick="showPage('tmdb')">
+                <i class="fas fa-fire"></i>
+                <span>TMDB 更新</span>
+            </a>
             <a class="nav-item" onclick="showPage('hdhive')">
                 <i class="fas fa-hive"></i>
                 <span>HDHive 搜索</span>
@@ -1005,6 +1009,40 @@
             </div>
         </div>
 
+        <div id="page-tmdb" class="page">
+            <div class="top-bar">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <h2 style="margin:0;">TMDB 更新</h2>
+                    <select class="filter-select" id="tmdbFeed" onchange="loadTmdbFeed(true)" style="min-width: 220px;">
+                        <option value="on_the_air">正在更新</option>
+                        <option value="airing_today">今日播出</option>
+                        <option value="trending_week">本周趋势</option>
+                        <option value="popular">热门</option>
+                        <option value="top_rated">高分</option>
+                    </select>
+                    <input type="text" id="tmdbSearchInput" class="filter-select" style="min-width:220px;flex:1;" placeholder="在当前列表中筛选..." onkeyup="filterTmdbFeed()">
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn btn-outline" onclick="loadTmdbFeed(true)">
+                        <i class="fas fa-sync-alt"></i>
+                        刷新
+                    </button>
+                </div>
+            </div>
+            <div id="tmdbGrid" class="series-grid">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>加载中...</p>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:center;margin-top:16px;">
+                <button class="btn btn-outline" id="tmdbLoadMoreBtn" onclick="loadTmdbFeed(false)" style="display:none;">
+                    <i class="fas fa-arrow-down"></i>
+                    加载更多
+                </button>
+            </div>
+        </div>
+
         <div id="page-hdhive" class="page">
             <div class="top-bar">
                 <h2>HDHive 资源搜索</h2>
@@ -1060,6 +1098,10 @@
         let isLoading = false;
         let hasMore = true;
         let allCards = []; // 缓存所有卡片数据
+        let tmdbFeedPage = 1;
+        let tmdbFeedHasMore = true;
+        let tmdbFeedLoading = false;
+        let tmdbFeedItems = [];
 
         // ========== 页面导航 ==========
         window.showPage = function(pageId) {
@@ -1084,6 +1126,7 @@
             if (pageId === 'download') loadDownloads();
             if (pageId === 'config') loadConfig();
             if (pageId === 'history') loadHistory();
+            if (pageId === 'tmdb') loadTmdbFeed(true);
             if (pageId === 'hdhive') loadHdhiveSearch();
 
             const nextHash = pageId ? `#/${pageId}` : '#/dashboard';
@@ -2328,6 +2371,145 @@
             }
         }
 
+        function renderTmdbFeedCards(items, container) {
+            const list = Array.isArray(items) ? items : [];
+            if (!list.length) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>没有数据</p></div>';
+                return;
+            }
+
+            const html = list.map(item => {
+                const tmdbId = item?.id;
+                const title = item?.name || item?.original_name || '未知剧集';
+                const overview = item?.overview || '';
+                const firstAir = item?.first_air_date || '';
+                const year = item?.year || (firstAir ? String(firstAir).slice(0, 4) : '');
+                const posterUrl = item?.poster_url || '';
+                const vote = item?.vote_average ? Number(item.vote_average).toFixed(1) : '';
+
+                return `
+                <div class="series-card" data-name="${String(title).replace(/"/g, '&quot;')}" data-year="${String(year).replace(/"/g, '&quot;')}" data-missing="0">
+                    <div class="series-card-header" style="background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);">
+                        ${posterUrl
+                            ? `<img src="${posterUrl}" alt="${String(title).replace(/"/g, '&quot;')}" crossorigin="anonymous" onload="this.style.opacity='1'" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                            : ''}
+                        <div class="placeholder" style="${posterUrl ? 'display:none' : 'display:flex'}; align-items:center; justify-content:center; height:100%;">
+                            <i class="fas fa-fire" style="font-size:64px; opacity:0.45;"></i>
+                        </div>
+                        <div class="series-card-badge complete">TMDB</div>
+                    </div>
+                    <div class="series-card-body">
+                        <h3 class="series-card-title" title="${String(title).replace(/"/g, '&quot;')}">${title}</h3>
+                        <div class="series-card-meta">
+                            <span><i class="fas fa-calendar"></i> ${firstAir ? firstAir : (year || '未知')}</span>
+                            <span><i class="fas fa-star"></i> ${vote || '-'}</span>
+                        </div>
+                        <div class="series-card-tags">
+                            ${year ? `<span class="tag year">${year}</span>` : ''}
+                            <span class="tag season">TMDB ${tmdbId || ''}</span>
+                        </div>
+                        ${overview ? `
+                            <div style="color:#94a3b8;font-size:13px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:10px;">
+                                ${escapeHtml(overview)}
+                            </div>
+                        ` : ''}
+                        <div class="series-card-actions" style="margin-top:12px;">
+                            <button class="btn btn-outline tmdb-hdhive-btn" style="width:100%;justify-content:center;" data-tmdb-id="${tmdbId || ''}" data-series-name="${String(title).replace(/"/g, '&quot;')}">
+                                <i class="fas fa-search"></i> 查询 HDHive
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        window.filterTmdbFeed = function() {
+            const input = document.getElementById('tmdbSearchInput');
+            const keyword = (input?.value || '').trim().toLowerCase();
+            const container = document.getElementById('tmdbGrid');
+            if (!container) return;
+
+            if (!keyword) {
+                renderTmdbFeedCards(tmdbFeedItems, container);
+                return;
+            }
+
+            const filtered = (tmdbFeedItems || []).filter(item => {
+                const hay = [
+                    item?.name || '',
+                    item?.original_name || '',
+                    item?.overview || '',
+                    item?.first_air_date || '',
+                ].join(' ').toLowerCase();
+                return hay.includes(keyword);
+            });
+            renderTmdbFeedCards(filtered, container);
+        }
+
+        window.loadTmdbFeed = async function(reset = true) {
+            const container = document.getElementById('tmdbGrid');
+            const loadMoreBtn = document.getElementById('tmdbLoadMoreBtn');
+            if (!container) return;
+            if (tmdbFeedLoading) return;
+
+            const ok = await ensureAuthenticated(false);
+            if (!ok) return;
+
+            const feed = (document.getElementById('tmdbFeed')?.value || 'on_the_air').trim();
+
+            if (reset) {
+                tmdbFeedPage = 1;
+                tmdbFeedHasMore = true;
+                tmdbFeedItems = [];
+                const searchInput = document.getElementById('tmdbSearchInput');
+                if (searchInput) searchInput.value = '';
+                container.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>加载中...</p></div>';
+            }
+
+            if (!tmdbFeedHasMore && !reset) {
+                return;
+            }
+
+            tmdbFeedLoading = true;
+            if (loadMoreBtn) {
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.style.display = 'none';
+            }
+
+            try {
+                const res = await authFetch(`/api/tmdb/feed?feed=${encodeURIComponent(feed)}&page=${tmdbFeedPage}`);
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.status !== 'success') {
+                    const msg = data.detail || data.message || '加载失败';
+                    container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${escapeHtml(msg)}</p></div>`;
+                    return;
+                }
+
+                const items = Array.isArray(data.items) ? data.items : [];
+                tmdbFeedItems = tmdbFeedItems.concat(items);
+                tmdbFeedHasMore = !!data.pagination?.has_more;
+                if (tmdbFeedHasMore) {
+                    tmdbFeedPage += 1;
+                }
+
+                filterTmdbFeed();
+
+                if (loadMoreBtn) {
+                    loadMoreBtn.style.display = tmdbFeedHasMore ? 'inline-flex' : 'none';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>${escapeHtml(error.message || '加载失败')}</p></div>`;
+            } finally {
+                tmdbFeedLoading = false;
+                if (loadMoreBtn) {
+                    loadMoreBtn.disabled = false;
+                }
+            }
+        }
+
         window.refreshDownloads = async function() {
             loadDownloads();
         }
@@ -2381,6 +2563,19 @@
 
             route();
             
+            const tmdbGrid = document.getElementById('tmdbGrid');
+            if (tmdbGrid) {
+                tmdbGrid.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.tmdb-hdhive-btn');
+                    if (!btn) return;
+                    e.preventDefault();
+                    const tmdbId = (btn.dataset.tmdbId || '').trim();
+                    const seriesName = btn.dataset.seriesName || '';
+                    if (!tmdbId) return;
+                    searchHdhive('', seriesName || `TMDB ${tmdbId}`, tmdbId, null);
+                });
+            }
+
             // 事件委托：处理下载按钮点击
             document.getElementById('seriesGrid').addEventListener('click', function(e) {
                 const downloadBtn = e.target.closest('.download-btn');
@@ -2444,7 +2639,16 @@
                 document.getElementById('hdhiveResult').innerHTML = `<i class="fas fa-spinner fa-spin"></i> 正在搜索 HDHive 资源... (TMDB: ${finalTmdbId})`;
                 
                 // 搜索 HDHive 资源
-                const searchRes = await authFetch(`/api/hdhive/search?series_id=${encodeURIComponent(seriesId)}&tmdb_id=${finalTmdbId}&season=${season}`);
+                const query = new URLSearchParams();
+                if (seriesId) {
+                    query.set('series_id', String(seriesId));
+                }
+                query.set('tmdb_id', String(finalTmdbId));
+                const seasonNum = season ? parseInt(season, 10) : null;
+                if (seasonNum && Number.isFinite(seasonNum)) {
+                    query.set('season', String(seasonNum));
+                }
+                const searchRes = await authFetch(`/api/hdhive/search?${query.toString()}`);
                 const searchData = await searchRes.json();
                 
                 if (searchData.status !== 'success' || !searchData.resources?.length) {

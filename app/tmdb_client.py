@@ -180,6 +180,29 @@ class TMDBClient:
         except Exception as e:
             logger.error(f"搜索剧集失败 {title}: {e}")
             return []
+
+    def get_tv_feed(self, feed: str, page: int = 1) -> Dict[str, Any]:
+        feed_key = (feed or "").strip().lower()
+        if feed_key in ("on_the_air", "airing_today", "popular", "top_rated"):
+            path = f"/tv/{feed_key}"
+        elif feed_key in ("trending_day", "trending_week"):
+            window = "day" if feed_key.endswith("_day") else "week"
+            path = f"/trending/tv/{window}"
+        else:
+            raise ValueError(f"Unsupported TMDB feed: {feed}")
+
+        safe_page = max(1, min(int(page or 1), 500))
+        params = {"language": self.language, "page": safe_page}
+
+        response, auth_mode = self._get(path, params=params, operation=f"TMDB feed {feed_key}")
+        if response.status_code == 200:
+            return response.json()
+
+        logger.warning(
+            f"TMDB feed 请求失败: feed={feed_key}, status={response.status_code}, auth_mode={auth_mode}, "
+            f"body={self._compact_response_text(response)}"
+        )
+        return {"page": safe_page, "results": [], "total_pages": 0, "total_results": 0}
     
     def get_tv_series_details(self, series_id: int) -> Optional[Dict]:
         """

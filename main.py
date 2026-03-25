@@ -903,6 +903,65 @@ async def search_tmdb_by_name(name: str):
         return {"status": "error", "message": str(e)}
 
 
+@app.get("/api/tmdb/candidates")
+async def search_tmdb_candidates(
+    name: str,
+    year: int = None,
+    limit: int = 5,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    global config_manager, tmdb_client
+
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    tmdb_config = config_manager.get_tmdb_config() if config_manager else {}
+    all_config = config_manager.get_all_config() if config_manager else {}
+    tmdb_proxy_url = _build_proxy_url((all_config.get("hdhive") or {}).get("proxy"))
+    tmdb_api_key = (tmdb_config.get("api_key") or "").strip()
+
+    if not tmdb_api_key:
+        raise HTTPException(status_code=400, detail="请先在配置中设置 TMDB API Key")
+
+    safe_limit = max(1, min(int(limit or 5), 10))
+
+    temp_client: Optional[TMDBClient] = None
+    client = tmdb_client
+    if client is None:
+        temp_client = TMDBClient(api_key=tmdb_api_key, language="zh-CN", proxy_url=tmdb_proxy_url)
+        client = temp_client
+
+    try:
+        candidates = client.search_tv_series_candidates(
+            title=name,
+            year=year,
+            limit=safe_limit,
+        )
+    finally:
+        if temp_client is not None:
+            try:
+                temp_client.client.close()
+            except Exception:
+                pass
+
+    normalized = []
+    for item in candidates or []:
+        first_air_date = item.get("first_air_date") or ""
+        normalized.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name") or item.get("original_name") or "",
+                "original_name": item.get("original_name") or "",
+                "first_air_date": first_air_date,
+                "year": first_air_date[:4] if first_air_date else "",
+                "overview": item.get("overview") or "",
+                "poster_path": item.get("poster_path") or "",
+            }
+        )
+
+    return {"status": "success", "count": len(normalized), "candidates": normalized}
+
+
 @app.get("/api/tmdb/{series_id}")
 async def get_tmdb_id(series_id: str):
     """获取剧集的 TMDB ID"""

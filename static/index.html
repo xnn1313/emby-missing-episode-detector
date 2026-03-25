@@ -519,6 +519,10 @@
                 <i class="fas fa-history"></i>
                 <span>检测历史</span>
             </a>
+            <a class="nav-item" onclick="showPage('hdhive')">
+                <i class="fas fa-hive"></i>
+                <span>HDHive 搜索</span>
+            </a>
         </nav>
 
         <nav class="nav-section">
@@ -811,6 +815,47 @@
                 </div>
             </div>
         </div>
+
+        <div id="page-hdhive" class="page">
+            <div class="top-bar">
+                <h2>HDHive 资源搜索</h2>
+            </div>
+
+            <div class="stat-card" style="max-width: 900px;">
+                <div class="form-group">
+                    <label>剧名关键词</label>
+                    <input type="text" id="hdhiveKeyword" class="filter-select" style="width: 100%;" placeholder="例如：黑镜" onkeydown="if(event.key==='Enter'){runHdhiveKeywordSearch()}">
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <div class="form-group" style="flex:1;min-width:220px;">
+                        <label>TMDB ID（可选）</label>
+                        <input type="text" id="hdhiveTmdbId" class="filter-select" style="width: 100%;" placeholder="例如：42009">
+                    </div>
+                    <div class="form-group" style="width:160px;">
+                        <label>季号（可选）</label>
+                        <input type="number" id="hdhiveSeason" class="filter-select" style="width: 100%;" placeholder="1" min="1">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+                    <button class="btn btn-primary" onclick="runHdhiveKeywordSearch()">
+                        <i class="fas fa-search"></i>
+                        按剧名搜索
+                    </button>
+                    <button class="btn btn-outline" onclick="runHdhiveTmdbSearch()">
+                        <i class="fas fa-hive"></i>
+                        按 TMDB ID 搜索
+                    </button>
+                    <button class="btn btn-outline" onclick="clearHdhiveSearch()">
+                        <i class="fas fa-eraser"></i>
+                        清空
+                    </button>
+                </div>
+
+                <div id="hdhiveSearchStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+                <div id="hdhiveSearchResult" style="margin-top: 15px;"></div>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -849,6 +894,7 @@
             if (pageId === 'download') loadDownloads();
             if (pageId === 'config') loadConfig();
             if (pageId === 'history') loadHistory();
+            if (pageId === 'hdhive') loadHdhiveSearch();
         }
 
         window.toggleSidebar = function() {
@@ -1498,6 +1544,214 @@
             } catch (error) {
                 console.error('加载配置失败:', error);
             }
+        }
+
+        function setHdhiveSearchStatus(type, html) {
+            const el = document.getElementById('hdhiveSearchStatus');
+            if (!el) return;
+            el.style.display = 'block';
+            el.style.background = type === 'success' ? '#1a3a1a' : type === 'loading' ? '#1a1a2e' : '#3a1a1a';
+            el.innerHTML = html;
+        }
+
+        async function loadHdhiveSearch() {
+            await ensureAuthenticated(false);
+        }
+
+        window.clearHdhiveSearch = function() {
+            const keyword = document.getElementById('hdhiveKeyword');
+            const tmdbId = document.getElementById('hdhiveTmdbId');
+            const season = document.getElementById('hdhiveSeason');
+            const status = document.getElementById('hdhiveSearchStatus');
+            const result = document.getElementById('hdhiveSearchResult');
+
+            if (keyword) keyword.value = '';
+            if (tmdbId) tmdbId.value = '';
+            if (season) season.value = '';
+            if (status) status.style.display = 'none';
+            if (result) result.innerHTML = '';
+        }
+
+        function renderHdhiveResources(title, tmdbId, season, resources) {
+            const container = document.getElementById('hdhiveSearchResult');
+            if (!container) return;
+
+            if (!resources || resources.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-box-open"></i>
+                        <p>没有找到可用资源</p>
+                        <div style="color:#888;font-size:13px;margin-top:8px;">TMDB ID: ${tmdbId}${season ? ` / 第${season}季` : ''}</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div style="margin-bottom:10px;color:#4ade80;font-weight:600;">
+                    找到 ${resources.length} 个资源 ${title ? `（${title}）` : ''} ${season ? `- 第${season}季` : ''}
+                </div>
+            `;
+
+            html += '<div style="max-height:520px;overflow-y:auto;">';
+            resources.forEach(r => {
+                const panType = r.pan_type || '';
+                const is115 = panType === '115' || (r.title && r.title.toLowerCase().includes('115'));
+                const isAli = panType === 'ali' || panType === 'aliyun' || (r.title && r.title.toLowerCase().includes('阿里'));
+                const isQuark = panType === 'quark' || (r.title && r.title.toLowerCase().includes('夸克'));
+                const isBaidu = panType === 'baidu' || (r.title && r.title.toLowerCase().includes('百度'));
+
+                let panBadge = '';
+                if (is115) {
+                    panBadge = '<span style="background:#667eea;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">115</span>';
+                } else if (isAli) {
+                    panBadge = '<span style="background:#00c853;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#fff;">阿里云盘</span>';
+                } else if (isQuark) {
+                    panBadge = '<span style="background:#00d9ff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#000;">夸克</span>';
+                } else if (isBaidu) {
+                    panBadge = '<span style="background:#29b6f6;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:#fff;">百度网盘</span>';
+                } else if (panType) {
+                    panBadge = `<span style="background:#888;padding:2px 8px;border-radius:4px;font-size:12px;">${panType}</span>`;
+                }
+
+                html += `<div style="background:#0a0a1a;padding:12px;border-radius:8px;margin-bottom:10px;cursor:pointer;" onclick="unlockHdhiveResource('${r.slug}', '${r.title?.replace(/'/g, "\\'") || '未知'}', ${r.unlock_points}, this)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;">
+                        <span style="font-weight:bold;color:#fff;">${r.title || '未知标题'}</span>
+                        ${panBadge}
+                    </div>
+                    <div style="display:flex;gap:15px;color:#888;font-size:13px;flex-wrap:wrap;">
+                        <span><i class="fas fa-hdd"></i> ${r.share_size || '未知'}</span>
+                        <span><i class="fas fa-video"></i> ${(r.video_resolution || []).join(', ')}</span>
+                        <span style="color:${r.unlock_points === 0 ? '#4ade80' : '#fbbf24'};"><i class="fas fa-coins"></i> ${r.unlock_points || 0} 积分</span>
+                    </div>
+                    ${r.is_unlocked ? '<div style="color:#4ade80;margin-top:5px;font-size:12px;"><i class="fas fa-check"></i> 已解锁</div>' : ''}
+                </div>`;
+            });
+            html += '</div>';
+
+            container.innerHTML = html;
+        }
+
+        async function runHdhiveSearchWithTmdbId(tmdbId, title) {
+            const seasonRaw = document.getElementById('hdhiveSeason')?.value;
+            const season = seasonRaw ? parseInt(seasonRaw, 10) : null;
+
+            setHdhiveSearchStatus('loading', '<i class="fas fa-spinner fa-spin"></i> 正在搜索 HDHive 资源...');
+
+            const query = new URLSearchParams();
+            query.set('tmdb_id', String(tmdbId));
+            if (season && Number.isFinite(season)) {
+                query.set('season', String(season));
+            }
+
+            const res = await authFetch(`/api/hdhive/search?${query.toString()}`);
+            const data = await res.json();
+            if (!res.ok || data.status !== 'success') {
+                setHdhiveSearchStatus('error', `<i class="fas fa-times-circle"></i> 查询失败：${data.detail || data.message || '未知错误'}`);
+                return;
+            }
+
+            setHdhiveSearchStatus('success', `<i class="fas fa-check-circle"></i> 查询成功：TMDB ${tmdbId}${season ? ` / 第${season}季` : ''}`);
+            renderHdhiveResources(title || '', String(tmdbId), season, data.resources || []);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (ch) => {
+                switch (ch) {
+                    case '&': return '&amp;';
+                    case '<': return '&lt;';
+                    case '>': return '&gt;';
+                    case '"': return '&quot;';
+                    case "'": return '&#39;';
+                    default: return ch;
+                }
+            });
+        }
+
+        function renderTmdbCandidates(keyword, candidates) {
+            const container = document.getElementById('hdhiveSearchResult');
+            if (!container) return;
+
+            const list = Array.isArray(candidates) ? candidates : [];
+            if (!list.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <p>没有找到“${escapeHtml(keyword)}”的 TMDB 候选</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `<div style="margin-bottom:10px;color:#4ade80;font-weight:600;">找到 ${list.length} 个候选，请选择：</div>`;
+            html += '<div style="max-height:520px;overflow-y:auto;">';
+
+            list.forEach((item) => {
+                const id = item?.id;
+                const title = item?.name || item?.original_name || '';
+                const airDate = item?.first_air_date || '';
+                const year = item?.year || (airDate ? String(airDate).slice(0, 4) : '');
+                const overview = item?.overview || '';
+
+                html += `
+                    <div style="background:#0a0a1a;padding:12px;border-radius:8px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.06);">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                            <div style="min-width:0;">
+                                <div style="font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                    ${escapeHtml(title || keyword)}
+                                </div>
+                                <div style="color:#888;font-size:13px;margin-top:4px;">
+                                    ${year ? `${escapeHtml(year)} ` : ''}${airDate ? `(${escapeHtml(airDate)}) ` : ''}TMDB: ${escapeHtml(id)}
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" style="padding:8px 14px;white-space:nowrap;" onclick="selectTmdbCandidate('${escapeHtml(id)}','${escapeHtml(title || keyword)}')">
+                                选择
+                            </button>
+                        </div>
+                        ${overview ? `<div style="color:#94a3b8;font-size:13px;margin-top:10px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(overview)}</div>` : ''}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        window.selectTmdbCandidate = async function(tmdbId, title) {
+            const cleanedId = String(tmdbId || '').trim();
+            if (!cleanedId) {
+                alert('TMDB ID 无效');
+                return;
+            }
+            document.getElementById('hdhiveTmdbId').value = cleanedId;
+            await runHdhiveSearchWithTmdbId(cleanedId, title || '');
+        }
+
+        window.runHdhiveKeywordSearch = async function() {
+            const keyword = (document.getElementById('hdhiveKeyword')?.value || '').trim();
+            if (!keyword) {
+                alert('请输入剧名关键词');
+                return;
+            }
+
+            setHdhiveSearchStatus('loading', '<i class="fas fa-spinner fa-spin"></i> 正在查询 TMDB...');
+            const tmdbRes = await authFetch(`/api/tmdb/candidates?name=${encodeURIComponent(keyword)}&limit=5`);
+            const tmdbData = await tmdbRes.json();
+            if (!tmdbRes.ok || tmdbData.status !== 'success') {
+                setHdhiveSearchStatus('error', `<i class="fas fa-times-circle"></i> TMDB 查询失败：${tmdbData.message || tmdbData.detail || '未知错误'}`);
+                return;
+            }
+
+            setHdhiveSearchStatus('success', `<i class="fas fa-check-circle"></i> TMDB 查询成功，请选择候选`);
+            renderTmdbCandidates(keyword, tmdbData.candidates || []);
+        }
+
+        window.runHdhiveTmdbSearch = async function() {
+            const tmdbId = (document.getElementById('hdhiveTmdbId')?.value || '').trim();
+            if (!tmdbId) {
+                alert('请输入 TMDB ID');
+                return;
+            }
+            await runHdhiveSearchWithTmdbId(tmdbId, '');
         }
 
         function updateWeComCallbackUrl() {

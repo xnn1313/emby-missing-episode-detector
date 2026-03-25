@@ -510,6 +510,16 @@
             color: var(--text-secondary);
             margin-top: 6px;
         }
+        .cfg-section-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin: 4px 0 10px;
+        }
+        .cfg-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 6px 0 12px;
+        }
         .login-card {
             width: 100%;
             max-width: 420px;
@@ -786,7 +796,7 @@
             <div class="top-bar">
                 <h2>配置</h2>
             </div>
-            <div class="stat-card" style="max-width: 960px;">
+            <div class="stat-card" style="max-width: 1100px;">
                 <div class="cfg-tabs">
                     <button class="cfg-tab" id="cfgTab-emby" onclick="showConfigTab('emby')"><i class="fas fa-tv"></i> Emby</button>
                     <button class="cfg-tab" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
@@ -799,6 +809,8 @@
                 </div>
                 <form id="configForm" onsubmit="saveConfig(event)">
                     <div class="config-section active" id="cfgSection-emby">
+                        <div class="cfg-section-title">Emby 设置</div>
+                        <div class="cfg-divider"></div>
                         <div class="cfg-columns">
                             <div class="form-group">
                             <label>Emby 服务器地址</label>
@@ -818,6 +830,8 @@
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-mp">
+                        <div class="cfg-section-title">MoviePilot 设置</div>
+                        <div class="cfg-divider"></div>
                         <div class="cfg-columns">
                             <div class="form-group">
                             <label>MoviePilot 地址</label>
@@ -834,6 +848,8 @@
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-hdhive">
+                        <div class="cfg-section-title">HDHive 设置</div>
+                        <div class="cfg-divider"></div>
                         <div class="cfg-columns">
                             <div class="form-group">
                             <label>HDHive API Key</label>
@@ -893,6 +909,8 @@
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-wecom">
+                        <div class="cfg-section-title">企业微信 设置</div>
+                        <div class="cfg-divider"></div>
                         <div class="cfg-columns">
                             <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 8px;">
@@ -938,6 +956,8 @@
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-global">
+                        <div class="cfg-section-title">全局 设置</div>
+                        <div class="cfg-divider"></div>
                         <div class="cfg-columns">
                             <div class="form-group">
                             <label>登录用户名</label>
@@ -990,7 +1010,7 @@
                 <h2>HDHive 资源搜索</h2>
             </div>
 
-            <div class="stat-card" style="max-width: 900px;">
+            <div class="stat-card" style="max-width: 1100px;">
                 <div class="form-group">
                     <label>剧名关键词</label>
                     <input type="text" id="hdhiveKeyword" class="filter-select" style="width: 100%;" placeholder="例如：黑镜" onkeydown="if(event.key==='Enter'){runHdhiveKeywordSearch()}">

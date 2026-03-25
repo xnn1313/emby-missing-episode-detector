@@ -96,6 +96,12 @@ class ConfigManager:
                 "token": "",
                 "encoding_aes_key": "",
                 "base_url": "https://qyapi.weixin.qq.com/cgi-bin"
+            },
+            "symedia": {
+                "enabled": False,
+                "host": "",
+                "token": "symedia",
+                "parent_id": "0"
             }
         }
     
@@ -228,6 +234,23 @@ class ConfigManager:
                 "auto_unlock": False
             }
         })
+
+    def get_symedia_config(self) -> Dict:
+        return self.config.get("symedia", {
+            "enabled": False,
+            "host": "",
+            "token": "symedia",
+            "parent_id": "0"
+        })
+
+    def set_symedia_config(self, host: str, token: str = "symedia", parent_id: str = "0", enabled: bool = True) -> bool:
+        self.config["symedia"] = {
+            "enabled": bool(enabled),
+            "host": host or "",
+            "token": token or "symedia",
+            "parent_id": str(parent_id or "0")
+        }
+        return self._save_config(self.config)
 
     def get_wecom_config(self) -> Dict:
         """获取企业微信配置"""

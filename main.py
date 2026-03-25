@@ -1094,6 +1094,72 @@ async def check_in_library(payload: Dict[str, Any], current_user: Dict[str, Any]
         )
     return {"status": "success", "count": len(results), "results": results}
 
+@app.get("/api/symedia/config")
+async def get_symedia_config(current_user: Dict[str, Any] = Depends(get_current_user)):
+    global config_manager
+    if config_manager is None:
+        config_manager = get_config_manager()
+    cfg = config_manager.get_symedia_config()
+    return {"status": "success", "config": cfg}
+
+@app.post("/api/symedia/config")
+async def set_symedia_config(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    global config_manager
+    if config_manager is None:
+        config_manager = get_config_manager()
+    host = (payload.get("host") or "").strip()
+    token = (payload.get("token") or "symedia").strip() or "symedia"
+    parent_id = str(payload.get("parent_id") or "0").strip() or "0"
+    enabled = bool(payload.get("enabled", True))
+    ok = config_manager.set_symedia_config(host=host, token=token, parent_id=parent_id, enabled=enabled)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Symedia 配置保存失败")
+    return {"status": "success", "test_result": f"{'已启用' if enabled else '未启用'}"}
+
+@app.post("/api/symedia/transfer")
+async def symedia_transfer(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    global config_manager
+    if config_manager is None:
+        config_manager = get_config_manager()
+    cfg = config_manager.get_symedia_config()
+    host = (cfg.get("host") or "").strip()
+    token = (cfg.get("token") or "symedia").strip() or "symedia"
+    parent_id = str(cfg.get("parent_id") or "0").strip() or "0"
+    if not host:
+        raise HTTPException(status_code=400, detail="Symedia 未配置")
+    urls = payload.get("urls")
+    url = payload.get("url")
+    if not urls and url:
+        urls = [url]
+    if not isinstance(urls, list) or not urls:
+        raise HTTPException(status_code=400, detail="缺少分享链接")
+    safe_urls = []
+    for u in urls:
+        s = str(u or "").strip()
+        if s:
+            safe_urls.append(s)
+    if not safe_urls:
+        raise HTTPException(status_code=400, detail="无效链接")
+    import httpx
+    api_url = f"{host.rstrip('/')}/api/v1/plugin/cloud_helper/add_share_urls_115"
+    params = {"token": token}
+    body = {"urls": safe_urls, "parent_id": parent_id}
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            resp = client.post(api_url, params=params, json=body, headers={"Content-Type": "application/json"})
+        if resp.status_code == 200:
+            data = {}
+            try:
+                data = resp.json()
+            except Exception:
+                data = {"raw": resp.text}
+            return {"status": "success", "response": data}
+        raise HTTPException(status_code=resp.status_code, detail=resp.text or "Symedia API 错误")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/tmdb/{series_id}")
 async def get_tmdb_id(series_id: str):

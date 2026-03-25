@@ -806,6 +806,7 @@
                     <button class="cfg-tab" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
                     <button class="cfg-tab" id="cfgTab-hdhive" onclick="showConfigTab('hdhive')"><i class="fas fa-hive"></i> HDHive</button>
                     <button class="cfg-tab" id="cfgTab-wecom" onclick="showConfigTab('wecom')"><i class="fas fa-building"></i> 企业微信</button>
+                    <button class="cfg-tab" id="cfgTab-symedia" onclick="showConfigTab('symedia')"><i class="fas fa-cloud"></i> Symedia</button>
                     <button class="cfg-tab" id="cfgTab-global" onclick="showConfigTab('global')"><i class="fas fa-globe"></i> 全局</button>
                     <div style="margin-left:auto;">
                         <button class="btn btn-primary" onclick="saveConfig(event)"><i class="fas fa-save"></i> 保存</button>
@@ -957,6 +958,33 @@
                                 <i class="fas fa-comment-dots"></i>
                                 测试企业微信
                             </button>
+                        </div>
+                    </div>
+                    <div class="config-section" id="cfgSection-symedia">
+                        <div class="cfg-section-title">Symedia 设置</div>
+                        <div class="cfg-divider"></div>
+                        <div class="cfg-columns">
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:8px;">
+                                    <input type="checkbox" id="symediaEnabled" style="width:auto;">
+                                    启用 Symedia 115 转存
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>Symedia 主机地址</label>
+                                <input type="text" id="symediaHost" class="filter-select" style="width:100%;" placeholder="http://192.168.1.100:8095">
+                                <div class="cfg-help">例如 http://IP:端口</div>
+                            </div>
+                            <div class="form-group">
+                                <label>Token</label>
+                                <input type="text" id="symediaToken" class="filter-select" style="width:100%;" value="symedia">
+                                <div class="cfg-help">默认 symedia</div>
+                            </div>
+                            <div class="form-group">
+                                <label>目标文件夹 CID</label>
+                                <input type="text" id="symediaParentId" class="filter-select" style="width:100%;" value="0">
+                                <div class="cfg-help">根目录为 "0"</div>
+                            </div>
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-global">
@@ -1883,6 +1911,16 @@
                     document.getElementById('wecomBaseUrl').value = wc.base_url || 'https://qyapi.weixin.qq.com/cgi-bin';
                 }
                 
+                const symRes = await authFetch('/api/symedia/config');
+                const symData = await symRes.json();
+                if (symData.status === 'success') {
+                    const sc = symData.config;
+                    document.getElementById('symediaEnabled').checked = sc.enabled || false;
+                    document.getElementById('symediaHost').value = sc.host || '';
+                    document.getElementById('symediaToken').value = sc.token || 'symedia';
+                    document.getElementById('symediaParentId').value = sc.parent_id || '0';
+                }
+
                 const meRes = await authFetch('/api/auth/me');
                 if (meRes.ok) {
                     const meData = await meRes.json();
@@ -2204,6 +2242,19 @@
                     body: JSON.stringify(wecomConfig)
                 });
                 const wecomData = await wecomResp.json();
+
+                const symediaConfig = {
+                    enabled: document.getElementById('symediaEnabled').checked,
+                    host: document.getElementById('symediaHost').value.trim(),
+                    token: document.getElementById('symediaToken').value.trim() || 'symedia',
+                    parent_id: document.getElementById('symediaParentId').value.trim() || '0'
+                };
+                const symResp = await authFetch('/api/symedia/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(symediaConfig)
+                });
+                const symData = await symResp.json();
                 
                 const adminPassword = document.getElementById('adminPassword').value.trim();
                 const adminUsername = document.getElementById('adminUsername').value.trim();
@@ -2232,6 +2283,7 @@
                 
                 if (data.status === 'success' || response.ok) {
                     const wecomLine = wecomData?.test_result ? ('\n企业微信: ' + wecomData.test_result) : '';
+                    const symLine = symData?.test_result ? ('\nSymedia: ' + symData.test_result) : '';
                     alert('✅ 配置已保存！\n\nEmby: ' + embyHost + '\nMoviePilot: ' + config.moviepilot.host + wecomLine);
                 } else {
                     alert('保存失败：' + (data.detail || data.message || '未知错误'));
@@ -2760,6 +2812,45 @@
                 }
             }
         }
+
+        async function transferSymedia(rawUrl, rawCode) {
+            const btn = event && event.target ? event.target.closest('button') : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 转存中...';
+            }
+            try {
+                let url = String(rawUrl || '').trim();
+                const code = String(rawCode || '').trim();
+                if (url && code && !url.includes('password=')) {
+                    const sep = url.includes('?') ? '&' : '?';
+                    url = `${url}${sep}password=${encodeURIComponent(code)}`;
+                }
+                if (!url) {
+                    alert('未获取到分享链接');
+                    return;
+                }
+                const res = await authFetch('/api/symedia/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.status !== 'success') {
+                    const msg = data.detail || data.message || '转存失败';
+                    alert('转存失败：' + msg);
+                    return;
+                }
+                alert('✅ 转存已提交');
+            } catch (err) {
+                alert('转存失败：' + (err.message || '未知错误'));
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> 转存';
+                }
+            }
+        }
         
         async function unlockHdhiveResource(slug, title, points, elem) {
             if (!confirm(`确定要解锁吗？\n\n资源: ${title}\n消耗积分: ${points}`)) {
@@ -2786,7 +2877,10 @@
                                 <p style="margin-bottom:5px;">链接: <a href="${url}" target="_blank" style="color:#667eea;">${url}</a></p>
                                 ${code ? `<p>访问码: <span style="color:#fbbf24;font-weight:bold;">${code}</span></p>` : ''}
                             </div>
-                            <button class="btn btn-primary" style="margin-top:10px;" onclick="event.stopPropagation(); copyAndClose()">复制并关闭</button>
+                            <div style="display:flex;gap:8px;margin-top:10px;">
+                                <button class="btn btn-primary" style="flex:1;" onclick="event.stopPropagation(); copyAndClose()">复制并关闭</button>
+                                <button class="btn btn-outline" style="flex:1;" onclick="event.stopPropagation(); transferSymedia('${url}', '${code}')"><i class="fas fa-cloud-upload-alt"></i> 转存</button>
+                            </div>
                         </div>
                     `;
                 } else {

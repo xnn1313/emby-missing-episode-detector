@@ -235,6 +235,46 @@ class EmbyClient:
             logger.error(f"获取季信息失败 {series_id}: {e}", exc_info=True)
             return []
     
+    def get_series_provider_index(self, library_ids: Optional[List[str]] = None) -> Dict[str, Dict]:
+        index: Dict[str, Dict] = {}
+        try:
+            params_base = {
+                'IncludeItemTypes': 'Series',
+                'Recursive': True,
+                'Fields': 'ProviderIds,ProductionYear,PremiereDate,Name'
+            }
+            items: List[Dict] = []
+            if library_ids:
+                for lib_id in library_ids:
+                    params = dict(params_base)
+                    params['ParentId'] = lib_id
+                    resp = self.client.get('/Items', params=params)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    items.extend(data.get('Items', []))
+            else:
+                resp = self.client.get('/Items', params=params_base)
+                resp.raise_for_status()
+                data = resp.json()
+                items = data.get('Items', [])
+            for item in items or []:
+                pid = item.get('ProviderIds') or {}
+                tmdb = pid.get('Tmdb') or pid.get('TmdbId') or pid.get('TmdbSeries') or ''
+                tmdb_str = str(tmdb).strip()
+                if tmdb_str:
+                    index[tmdb_str] = {
+                        'id': item.get('Id'),
+                        'name': item.get('Name') or '',
+                        'year': (item.get('ProductionYear') or '') or ((item.get('PremiereDate') or '')[:4] if item.get('PremiereDate') else '')
+                    }
+            return index
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"获取 Provider 索引失败: HTTP {e.response.status_code}")
+            return {}
+        except Exception as e:
+            logger.error(f"获取 Provider 索引失败: {e}", exc_info=True)
+            return {}
+    
     def get_episodes_batch(self, series_ids: List[str]) -> Dict[str, List[Dict]]:
         """
         批量获取多个剧集的所有集（优化性能）

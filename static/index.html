@@ -2386,6 +2386,7 @@
                 const year = item?.year || (firstAir ? String(firstAir).slice(0, 4) : '');
                 const posterUrl = item?.poster_url || '';
                 const vote = item?.vote_average ? Number(item.vote_average).toFixed(1) : '';
+                const inLib = !!item?.in_library;
 
                 return `
                 <div class="series-card" data-name="${String(title).replace(/"/g, '&quot;')}" data-year="${String(year).replace(/"/g, '&quot;')}" data-missing="0">
@@ -2407,6 +2408,7 @@
                         <div class="series-card-tags">
                             ${year ? `<span class="tag year">${year}</span>` : ''}
                             <span class="tag season">TMDB ${tmdbId || ''}</span>
+                            ${inLib ? `<span class="tag year"><i class="fas fa-database"></i> 已入库</span>` : `<span class="tag missing"><i class="fas fa-database"></i> 未入库</span>`}
                         </div>
                         ${overview ? `
                             <div style="color:#94a3b8;font-size:13px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:10px;">
@@ -2494,6 +2496,31 @@
                 if (tmdbFeedHasMore) {
                     tmdbFeedPage += 1;
                 }
+
+                try {
+                    const ids = items.map(x => x?.id).filter(Boolean);
+                    if (ids.length) {
+                        const resp = await authFetch('/api/emby/in_library', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tmdb_ids: ids })
+                        });
+                        const mapData = await resp.json().catch(() => ({}));
+                        if (resp.ok && mapData.status === 'success') {
+                            const map = {};
+                            for (const r of (mapData.results || [])) {
+                                map[String(r.tmdb_id)] = !!r.in_library;
+                            }
+                            tmdbFeedItems = tmdbFeedItems.map(item => {
+                                const idStr = String(item?.id || '');
+                                if (idStr && map.hasOwnProperty(idStr)) {
+                                    return { ...item, in_library: map[idStr] };
+                                }
+                                return item;
+                            });
+                        }
+                    }
+                } catch (_) {}
 
                 filterTmdbFeed();
 

@@ -1064,6 +1064,36 @@ async def get_tmdb_feed(
         },
     }
 
+@app.post("/api/emby/in_library")
+async def check_in_library(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    global emby_client, config_manager
+    if emby_client is None:
+        raise HTTPException(status_code=400, detail="Emby 未配置")
+    ids = payload.get("tmdb_ids") or []
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail="缺少 tmdb_ids")
+    ids_norm = [str(x).strip() for x in ids if str(x).strip()]
+    lib_config = {}
+    try:
+        if config_manager is None:
+            config_manager = get_config_manager()
+        lib_config = (config_manager.get_library_config() or {})
+    except Exception:
+        lib_config = {}
+    library_ids = lib_config.get("selected_ids") if lib_config.get("enabled") else None
+    index = emby_client.get_series_provider_index(library_ids=library_ids)
+    results = []
+    for tmdb_id in ids_norm:
+        info = index.get(tmdb_id)
+        results.append(
+            {
+                "tmdb_id": tmdb_id,
+                "in_library": info is not None,
+                "series": info or {},
+            }
+        )
+    return {"status": "success", "count": len(results), "results": results}
+
 
 @app.get("/api/tmdb/{series_id}")
 async def get_tmdb_id(series_id: str):

@@ -465,6 +465,9 @@
             z-index: 10000;
         }
 
+        .config-section { display: none; }
+        .config-section.active { display: block; }
+
         .login-card {
             width: 100%;
             max-width: 420px;
@@ -741,48 +744,56 @@
             <div class="top-bar">
                 <h2>配置</h2>
             </div>
-            <div class="stat-card" style="max-width: 760px;">
+            <div class="stat-card" style="max-width: 960px;">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+                    <button class="btn btn-outline" id="cfgTab-emby" onclick="showConfigTab('emby')"><i class="fas fa-tv"></i> Emby</button>
+                    <button class="btn btn-outline" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
+                    <button class="btn btn-outline" id="cfgTab-hdhive" onclick="showConfigTab('hdhive')"><i class="fas fa-hive"></i> HDHive</button>
+                    <button class="btn btn-outline" id="cfgTab-wecom" onclick="showConfigTab('wecom')"><i class="fas fa-building"></i> 企业微信</button>
+                    <button class="btn btn-outline" id="cfgTab-global" onclick="showConfigTab('global')"><i class="fas fa-globe"></i> 全局</button>
+                    <div style="margin-left:auto;">
+                        <button class="btn btn-primary" onclick="saveConfig(event)"><i class="fas fa-save"></i> 保存</button>
+                    </div>
+                </div>
                 <form id="configForm" onsubmit="saveConfig(event)">
-                    <div class="form-group">
-                        <label>Emby 服务器地址</label>
-                        <input type="text" id="embyHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:8096">
+                    <div class="config-section active" id="cfgSection-emby">
+                        <div class="form-group">
+                            <label>Emby 服务器地址</label>
+                            <input type="text" id="embyHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:8096">
+                        </div>
+                        <div class="form-group">
+                            <label>Emby API 密钥</label>
+                            <input type="text" id="embyApiKey" class="filter-select" style="width: 100%;" placeholder="在 Emby 设置 → API 中获取">
+                        </div>
+                        <div class="form-group">
+                            <label>TMDB API Key</label>
+                            <input type="password" id="tmdbApiKey" class="filter-select" style="width: 100%;" placeholder="在 themoviedb.org 申请">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Emby API 密钥</label>
-                        <input type="text" id="embyApiKey" class="filter-select" style="width: 100%;" placeholder="在 Emby 设置 → API 中获取">
+                    <div class="config-section" id="cfgSection-mp">
+                        <div class="form-group">
+                            <label>MoviePilot 地址</label>
+                            <input type="text" id="mpHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:3000">
+                        </div>
+                        <div class="form-group">
+                            <label>MoviePilot 用户名</label>
+                            <input type="text" id="mpUsername" class="filter-select" style="width: 100%;" value="admin">
+                        </div>
+                        <div class="form-group">
+                            <label>MoviePilot 密码</label>
+                            <input type="password" id="mpPassword" class="filter-select" style="width: 100%;">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>TMDB API Key <span style="color:#888;font-size:12px;">(用于 HDHive 资源搜索)</span></label>
-                        <input type="password" id="tmdbApiKey" class="filter-select" style="width: 100%;" placeholder="在 themoviedb.org 申请">
-                    </div>
-                    <div class="form-group">
-                        <label>MoviePilot 地址</label>
-                        <input type="text" id="mpHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:3000">
-                    </div>
-                    <div class="form-group">
-                        <label>MoviePilot 用户名</label>
-                        <input type="text" id="mpUsername" class="filter-select" style="width: 100%;" value="admin">
-                    </div>
-                    <div class="form-group">
-                        <label>MoviePilot 密码</label>
-                        <input type="password" id="mpPassword" class="filter-select" style="width: 100%;">
-                    </div>
-                    
-                    <hr style="margin: 20px 0; border-color: #444;">
-                    <h3 style="color: #667eea; margin-bottom: 15px;"><i class="fas fa-hive"></i> HDHive 配置</h3>
-                    
-                    <div class="form-group">
-                        <label>HDHive API Key</label>
-                        <input type="password" id="hdhiveApiKey" class="filter-select" style="width: 100%;" placeholder="在 HDHive 设置中获取 API Key">
-                    </div>
-                    <div class="form-group">
-                        <label>API 地址</label>
-                        <input type="text" id="hdhiveBaseUrl" class="filter-select" style="width: 100%;" value="https://hdhive.com/api/open" placeholder="https://hdhive.com/api/open">
-                    </div>
-                    
-                    <details style="margin-bottom: 15px;">
-                        <summary style="cursor: pointer; color: #888;">代理设置（可选）</summary>
-                        <div style="margin-top: 10px; padding: 10px; background: #1a1a2e; border-radius: 8px;">
+                    <div class="config-section" id="cfgSection-hdhive">
+                        <div class="form-group">
+                            <label>HDHive API Key</label>
+                            <input type="password" id="hdhiveApiKey" class="filter-select" style="width: 100%;" placeholder="在 HDHive 设置中获取 API Key">
+                        </div>
+                        <div class="form-group">
+                            <label>API 地址</label>
+                            <input type="text" id="hdhiveBaseUrl" class="filter-select" style="width: 100%;" value="https://hdhive.com/api/open" placeholder="https://hdhive.com/api/open">
+                        </div>
+                        <div style="margin-top:10px; padding: 10px; background: #1a1a2e; border-radius: 8px;">
                             <div class="form-group">
                                 <label style="display: flex; align-items: center; gap: 8px;">
                                     <input type="checkbox" id="hdhiveProxyEnabled" style="width: auto;">
@@ -808,88 +819,93 @@
                                 </div>
                             </div>
                         </div>
-                    </details>
-                    
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="hdhiveEnabled" style="width: auto;">
-                            启用 HDHive 资源查询
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>最大积分解锁</label>
-                        <input type="number" id="hdhiveMaxPoints" class="filter-select" style="width: 100%;" value="50" min="0" max="1000">
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-primary" style="flex: 1;">
-                            <i class="fas fa-save"></i>
-                            保存配置
-                        </button>
-                        <button type="button" class="btn btn-outline" onclick="testHdhiveConnection()" style="flex: 1;">
-                            <i class="fas fa-plug"></i>
-                            测试连接
-                        </button>
-                    </div>
-                    
-                    <div id="hdhiveStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
-
-                    <hr style="margin: 24px 0; border-color: #444;">
-                    <h3 style="color: #667eea; margin-bottom: 15px;"><i class="fas fa-building"></i> 企业微信配置</h3>
-
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" id="wecomEnabled" style="width: auto;">
-                            启用企业微信搜剧解锁
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>企业 ID CorpID</label>
-                        <input type="text" id="wecomCorpId" class="filter-select" style="width: 100%;" placeholder="wwxxxxxxxxxxxxxxxx">
-                    </div>
-                    <div class="form-group">
-                        <label>应用 AgentId</label>
-                        <input type="number" id="wecomAgentId" class="filter-select" style="width: 100%;" placeholder="1000002">
-                    </div>
-                    <div class="form-group">
-                        <label>应用 Secret</label>
-                        <input type="password" id="wecomCorpSecret" class="filter-select" style="width: 100%;" placeholder="用于获取 AccessToken">
-                    </div>
-                    <div class="form-group">
-                        <label>回调 Token</label>
-                        <input type="password" id="wecomToken" class="filter-select" style="width: 100%;" placeholder="企业微信回调配置中的 Token">
-                    </div>
-                    <div class="form-group">
-                        <label>回调 EncodingAESKey</label>
-                        <input type="password" id="wecomEncodingAesKey" class="filter-select" style="width: 100%;" placeholder="43 位 EncodingAESKey">
-                    </div>
-                    <div class="form-group">
-                        <label>API 地址</label>
-                        <input type="text" id="wecomBaseUrl" class="filter-select" style="width: 100%;" value="https://qyapi.weixin.qq.com/cgi-bin">
-                    </div>
-                    <div class="form-group">
-                        <label>回调地址</label>
-                        <input type="text" id="wecomCallbackUrl" class="filter-select" style="width: 100%;" readonly>
-                        <div style="color: #888; font-size: 12px; margin-top: 6px;">
-                            把这个地址填到企业微信自建应用的接收消息配置里
+                        <div class="form-group" style="margin-top:10px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="hdhiveEnabled" style="width: auto;">
+                                启用 HDHive 资源查询
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>最大积分解锁</label>
+                            <input type="number" id="hdhiveMaxPoints" class="filter-select" style="width: 100%;" value="50" min="0" max="1000">
+                        </div>
+                        <div id="hdhiveStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button type="button" class="btn btn-outline" onclick="testHdhiveConnection()" style="flex: 1;">
+                                <i class="fas fa-plug"></i>
+                                测试连接
+                            </button>
                         </div>
                     </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="button" class="btn btn-outline" onclick="testWeComConnection()" style="flex: 1;">
-                            <i class="fas fa-comment-dots"></i>
-                            测试企业微信
-                        </button>
+                    <div class="config-section" id="cfgSection-wecom">
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="wecomEnabled" style="width: auto;">
+                                启用企业微信搜剧解锁
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>企业 ID CorpID</label>
+                            <input type="text" id="wecomCorpId" class="filter-select" style="width: 100%;" placeholder="wwxxxxxxxxxxxxxxxx">
+                        </div>
+                        <div class="form-group">
+                            <label>应用 AgentId</label>
+                            <input type="number" id="wecomAgentId" class="filter-select" style="width: 100%;" placeholder="1000002">
+                        </div>
+                        <div class="form-group">
+                            <label>应用 Secret</label>
+                            <input type="password" id="wecomCorpSecret" class="filter-select" style="width: 100%;" placeholder="用于获取 AccessToken">
+                        </div>
+                        <div class="form-group">
+                            <label>回调 Token</label>
+                            <input type="password" id="wecomToken" class="filter-select" style="width: 100%;" placeholder="企业微信回调配置中的 Token">
+                        </div>
+                        <div class="form-group">
+                            <label>回调 EncodingAESKey</label>
+                            <input type="password" id="wecomEncodingAesKey" class="filter-select" style="width: 100%;" placeholder="43 位 EncodingAESKey">
+                        </div>
+                        <div class="form-group">
+                            <label>API 地址</label>
+                            <input type="text" id="wecomBaseUrl" class="filter-select" style="width: 100%;" value="https://qyapi.weixin.qq.com/cgi-bin">
+                        </div>
+                        <div class="form-group">
+                            <label>回调地址</label>
+                            <input type="text" id="wecomCallbackUrl" class="filter-select" style="width: 100%;" readonly>
+                        </div>
+                        <div id="wecomStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button type="button" class="btn btn-outline" onclick="testWeComConnection()" style="flex: 1;">
+                                <i class="fas fa-comment-dots"></i>
+                                测试企业微信
+                            </button>
+                        </div>
                     </div>
-
-                    <div id="wecomStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
-
-                    <hr style="margin: 24px 0; border-color: #444;">
-                    <h3 style="color: #667eea; margin-bottom: 15px;"><i class="fas fa-user-shield"></i> 管理员设置</h3>
-                    <div class="form-group">
-                        <label>修改管理员密码</label>
-                        <input type="password" id="adminPassword" class="filter-select" style="width: 100%;" placeholder="留空则不修改">
-                        <div style="color:#888;font-size:12px;margin-top:6px;">默认账号：admin / password</div>
+                    <div class="config-section" id="cfgSection-global">
+                        <div class="form-group">
+                            <label>登录用户名</label>
+                            <input type="text" id="adminUsername" class="filter-select" style="width: 100%;" placeholder="管理员用户名">
+                        </div>
+                        <div class="form-group">
+                            <label>修改管理员密码</label>
+                            <input type="password" id="adminPassword" class="filter-select" style="width: 100%;" placeholder="留空则不修改">
+                        </div>
+                        <hr style="margin: 16px 0; border-color: #444;">
+                        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                            <input type="checkbox" id="globalProxyEnabled" style="width:auto;">
+                            <label style="margin:0;">启用全局代理</label>
+                        </div>
+                        <div class="form-group">
+                            <label>代理地址</label>
+                            <input type="text" id="globalProxyHost" class="filter-select" style="width: 100%;" placeholder="127.0.0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>代理端口</label>
+                            <input type="number" id="globalProxyPort" class="filter-select" style="width: 100%;" placeholder="7890">
+                        </div>
+                        <div class="form-group">
+                            <label>代理用户名（可选）</label>
+                            <input type="text" id="globalProxyUser" class="filter-select" style="width: 100%;" placeholder="">
+                        </div>
                     </div>
                 </form>
             </div>
@@ -1734,6 +1750,14 @@
                     document.getElementById('wecomEncodingAesKey').value = wc.encoding_aes_key || '';
                     document.getElementById('wecomBaseUrl').value = wc.base_url || 'https://qyapi.weixin.qq.com/cgi-bin';
                 }
+                
+                const meRes = await authFetch('/api/auth/me');
+                if (meRes.ok) {
+                    const meData = await meRes.json();
+                    window.currentAdminName = meData?.user?.username || 'admin';
+                    const userInput = document.getElementById('adminUsername');
+                    if (userInput) userInput.value = window.currentAdminName;
+                }
             } catch (error) {
                 console.error('加载配置失败:', error);
             }
@@ -2013,10 +2037,10 @@
                     base_url: document.getElementById('hdhiveBaseUrl').value.trim() || 'https://hdhive.com/api/open',
                     enabled: document.getElementById('hdhiveEnabled').checked,
                     proxy: {
-                        enabled: document.getElementById('hdhiveProxyEnabled').checked,
-                        host: document.getElementById('hdhiveProxyHost').value.trim(),
-                        port: parseInt(document.getElementById('hdhiveProxyPort').value) || 0,
-                        username: document.getElementById('hdhiveProxyUser').value.trim(),
+                        enabled: document.getElementById('hdhiveProxyEnabled').checked || document.getElementById('globalProxyEnabled').checked,
+                        host: (document.getElementById('hdhiveProxyHost').value.trim() || document.getElementById('globalProxyHost').value.trim()),
+                        port: (parseInt(document.getElementById('hdhiveProxyPort').value) || parseInt(document.getElementById('globalProxyPort').value) || 0),
+                        username: (document.getElementById('globalProxyUser').value.trim() || document.getElementById('hdhiveProxyUser').value.trim()),
                         password: document.getElementById('hdhiveProxyPass').value.trim()
                     },
                     settings: {
@@ -2050,15 +2074,26 @@
                 const wecomData = await wecomResp.json();
                 
                 const adminPassword = document.getElementById('adminPassword').value.trim();
-                if (adminPassword) {
-                    const passResp = await authFetch('/api/auth/password', {
+                const adminUsername = document.getElementById('adminUsername').value.trim();
+                const willChangeName = adminUsername && window.currentAdminName && adminUsername !== window.currentAdminName;
+                if (adminPassword || willChangeName) {
+                    const payload = {};
+                    if (adminPassword) payload['new_password'] = adminPassword;
+                    if (willChangeName) payload['new_username'] = adminUsername;
+                    const accResp = await authFetch('/api/auth/account', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ new_password: adminPassword })
+                        body: JSON.stringify(payload)
                     });
-                    if (!passResp.ok) {
-                        const err = await passResp.json().catch(() => ({}));
-                        alert('管理员密码修改失败：' + (err.detail || err.message || '未知错误'));
+                    if (!accResp.ok) {
+                        const err = await accResp.json().catch(() => ({}));
+                        alert('管理员账号修改失败：' + (err.detail || err.message || '未知错误'));
+                        return;
+                    }
+                    const accData = await accResp.json().catch(() => ({}));
+                    if (accData.require_relogin) {
+                        alert('管理员账号已更新，请重新登录');
+                        logout();
                         return;
                     }
                 }
@@ -2072,6 +2107,24 @@
             } catch (error) {
                 alert('保存失败：' + error.message);
             }
+        }
+        
+        window.showConfigTab = function(name) {
+            const tabs = ['emby','mp','hdhive','wecom','global'];
+            tabs.forEach(t => {
+                const sec = document.getElementById('cfgSection-' + t);
+                const btn = document.getElementById('cfgTab-' + t);
+                if (sec) sec.classList.toggle('active', t === name);
+                if (btn) {
+                    if (t === name) {
+                        btn.classList.remove('btn-outline');
+                        btn.classList.add('btn-primary');
+                    } else {
+                        btn.classList.add('btn-outline');
+                        btn.classList.remove('btn-primary');
+                    }
+                }
+            });
         }
         
         window.testHdhiveConnection = async function() {

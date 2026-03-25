@@ -621,6 +621,24 @@ async def change_password(payload: Dict[str, Any], current_user: Dict[str, Any] 
         raise HTTPException(status_code=500, detail="密码更新失败")
     return {"status": "success"}
 
+@app.post("/api/auth/account")
+async def change_account(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可修改账号")
+    new_username = (payload.get("new_username") or "").strip()
+    new_password = (payload.get("new_password") or "").strip()
+    user_db = get_user_database()
+    changed = False
+    if new_username:
+        if not user_db.set_username(current_user["username"], new_username):
+            raise HTTPException(status_code=400, detail="用户名更新失败或已存在")
+        changed = True
+    if new_password:
+        if not user_db.set_password(new_username or current_user["username"], new_password):
+            raise HTTPException(status_code=500, detail="密码更新失败")
+        changed = True
+    return {"status": "success", "require_relogin": changed}
+
 
 @app.get("/api/status")
 async def get_status():

@@ -206,6 +206,22 @@ class UserDatabase:
                 return True
         return False
     
+    def set_username(self, old_username: str, new_username: str) -> bool:
+        if not new_username or new_username == old_username:
+            return False
+        db = self._load_db()
+        for u in db["users"]:
+            if u["username"] == new_username:
+                logger.warning(f"用户名已存在：{new_username}")
+                return False
+        for i, user in enumerate(db["users"]):
+            if user["username"] == old_username:
+                db["users"][i]["username"] = new_username
+                self._save_db(db)
+                logger.info(f"用户名已更新：{old_username} -> {new_username}")
+                return True
+        return False
+    
     def create_default_admin(self) -> Dict:
         """创建默认管理员账号"""
         admin = self.create_user(

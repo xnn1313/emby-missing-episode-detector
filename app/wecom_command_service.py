@@ -159,6 +159,7 @@ class WeComCommandService:
                     "is_unlocked": item.get("is_unlocked", False),
                     "video_resolution": item.get("video_resolution", []),
                     "source": item.get("source", []),
+                    "pan_type": item.get("pan_type"),  # 添加网盘类型
                     "tmdb_id": str(target.get("id")),
                     "series_name": target.get("name") or target.get("original_name") or "",
                 }
@@ -186,8 +187,24 @@ class WeComCommandService:
             extra = " 已解锁" if item.get("is_unlocked") else ""
             if max_points and points > max_points:
                 extra += " 超过积分上限"
+            
+            # 添加网盘类型标志
+            pan_type = item.get("pan_type") or ""
+            pan_badge = ""
+            if pan_type:
+                if pan_type == "115":
+                    pan_badge = "[115]"
+                elif pan_type in ("ali", "aliyun"):
+                    pan_badge = "[阿里云盘]"
+                elif pan_type == "quark":
+                    pan_badge = "[夸克]"
+                elif pan_type == "baidu":
+                    pan_badge = "[百度网盘]"
+                else:
+                    pan_badge = f"[{pan_type}]"
+            
             lines.append(
-                f"{idx}. {item['title']}\n"
+                f"{idx}. {item['title']} {pan_badge}\n"
                 f"积分:{points} 分辨率:{resolutions} 来源:{sources}{extra}"
             )
 

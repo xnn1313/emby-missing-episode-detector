@@ -62,6 +62,8 @@ async def startup_event():
     global emby_client, detector, db, config_manager, moviepilot_client, hdhive_client, last_result
     
     try:
+        # 初始化日志
+        setup_logging()
         logger.info("正在启动服务...")
 
         config_manager = get_config_manager()

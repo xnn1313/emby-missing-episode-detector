@@ -203,6 +203,23 @@ class WeComClient:
         logger.info(f"企业微信消息发送成功: {user_id}")
         return data
 
+    def send_news_message(self, user_id: str, articles: list, safe: int = 0) -> Dict[str, Any]:
+        token = self.get_access_token()
+        data = self._request(
+            "POST",
+            "/message/send",
+            params={"access_token": token},
+            json={
+                "touser": user_id,
+                "msgtype": "news",
+                "agentid": self.config.agent_id,
+                "news": {"articles": articles[:8]},
+                "safe": safe,
+            },
+        )
+        logger.info(f"企业微信图文消息发送成功: {user_id}")
+        return data
+
     def verify_callback_url(self, signature: str, timestamp: str, nonce: str, echostr: str) -> str:
         if not self.crypto:
             raise WeComError("企业微信回调加解密未配置")

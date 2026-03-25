@@ -98,6 +98,7 @@ class WeComCommandService:
                 "tmdb_results": candidates,
                 "resource_results": [],
                 "last_keyword": keyword,
+                "last_action": "search",
             },
             db=db,
         )
@@ -175,6 +176,7 @@ class WeComCommandService:
                 **session,
                 "resource_results": resource_results,
                 "selected_tmdb": target,
+                "last_action": "resources",
             },
             db=db,
         )
@@ -204,6 +206,57 @@ class WeComCommandService:
         lines.append("")
         lines.append("回复“解锁 序号”获取链接，例如：解锁 1")
         return "\n".join(lines)
+
+    def build_news_articles(self, user_id: str, db: Any = None) -> List[Dict[str, str]]:
+        session = self._get_session(user_id, db=db)
+        action = session.get("last_action")
+        articles: List[Dict[str, str]] = []
+
+        def poster_url(path: str) -> str:
+            p = (path or "").strip()
+            if not p:
+                return ""
+            if p.startswith("http://") or p.startswith("https://"):
+                return p
+            return f"https://image.tmdb.org/t/p/w500{p}"
+
+        if action == "search":
+            candidates = session.get("tmdb_results") or []
+            for item in candidates[:6]:
+                title = item.get("name") or item.get("original_name") or "未知剧名"
+                air_date = item.get("first_air_date") or ""
+                year = air_date[:4] if air_date else ""
+                pic = poster_url(item.get("poster_path") or "")
+                if not pic:
+                    continue
+                tmdb_id = str(item.get("id") or "")
+                articles.append(
+                    {
+                        "title": f"{title}{f' ({year})' if year else ''}",
+                        "description": f"TMDB {tmdb_id}" if tmdb_id else "",
+                        "url": f"https://www.themoviedb.org/tv/{tmdb_id}" if tmdb_id else "https://www.themoviedb.org/",
+                        "picurl": pic,
+                    }
+                )
+
+        elif action == "resources":
+            target = session.get("selected_tmdb") or {}
+            title = target.get("name") or target.get("original_name") or "未知剧名"
+            air_date = target.get("first_air_date") or ""
+            year = air_date[:4] if air_date else ""
+            pic = poster_url(target.get("poster_path") or "")
+            tmdb_id = str(target.get("id") or "")
+            if pic:
+                articles.append(
+                    {
+                        "title": f"{title}{f' ({year})' if year else ''}",
+                        "description": f"TMDB {tmdb_id}" if tmdb_id else "",
+                        "url": f"https://www.themoviedb.org/tv/{tmdb_id}" if tmdb_id else "https://www.themoviedb.org/",
+                        "picurl": pic,
+                    }
+                )
+
+        return articles
 
     def _unlock_resource(self, user_id: str, index: int, hdhive_client: Any, db: Any, config_manager: Any) -> str:
         if hdhive_client is None:

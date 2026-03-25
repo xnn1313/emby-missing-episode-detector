@@ -196,15 +196,25 @@ class UserDatabase:
                 return True
         return False
     
+    def set_password(self, username: str, new_password: str) -> bool:
+        db = self._load_db()
+        for i, user in enumerate(db["users"]):
+            if user["username"] == username:
+                db["users"][i]["password_hash"] = pwd_context.hash(new_password)
+                self._save_db(db)
+                logger.info(f"用户密码已更新：{username}")
+                return True
+        return False
+    
     def create_default_admin(self) -> Dict:
         """创建默认管理员账号"""
         admin = self.create_user(
             username="admin",
-            password="admin123",  # 首次登录后应修改
+            password="password",
             role="admin"
         )
         if admin:
-            logger.warning("默认管理员账号已创建：admin / admin123")
+            logger.warning("默认管理员账号已创建：admin / password")
         return admin or {}
 
 

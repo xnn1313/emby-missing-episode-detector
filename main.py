@@ -608,6 +608,19 @@ async def get_me(current_user: Dict[str, Any] = Depends(get_current_user)):
         }
     }
 
+@app.post("/api/auth/password")
+async def change_password(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    new_password = (payload.get("new_password") or "").strip()
+    if not new_password:
+        raise HTTPException(status_code=400, detail="新密码不能为空")
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可修改密码")
+    user_db = get_user_database()
+    ok = user_db.set_password(current_user["username"], new_password)
+    if not ok:
+        raise HTTPException(status_code=500, detail="密码更新失败")
+    return {"status": "success"}
+
 
 @app.get("/api/status")
 async def get_status():
@@ -622,7 +635,7 @@ async def get_status():
 
 
 @app.get("/api/libraries")
-async def get_libraries():
+async def get_libraries(current_user: Dict[str, Any] = Depends(get_current_user)):
     """获取 Emby 媒体库列表"""
     if emby_client is None:
         raise HTTPException(status_code=400, detail="Emby 未配置")
@@ -732,7 +745,7 @@ async def set_config(config: FullConfig, current_user: Dict[str, Any] = Depends(
 
 
 @app.get("/api/detect")
-async def run_detection():
+async def run_detection(current_user: Dict[str, Any] = Depends(get_current_user)):
     """运行缺集检测（异步模式，立即返回）"""
     global last_result
     
@@ -818,7 +831,7 @@ async def run_detection():
 
 
 @app.get("/api/results")
-async def get_results():
+async def get_results(current_user: Dict[str, Any] = Depends(get_current_user)):
     """获取检测结果"""
     if last_result is None:
         return {"status": "no_data", "message": "暂无检测结果"}
@@ -1089,7 +1102,7 @@ async def get_cards(page: int = 1, page_size: int = 20):
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(current_user: Dict[str, Any] = Depends(get_current_user)):
     """健康检查"""
     return {"status": "healthy", "version": "0.1.0"}
 

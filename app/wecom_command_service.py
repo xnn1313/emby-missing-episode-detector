@@ -151,6 +151,10 @@ class WeComCommandService:
 
         resource_results: List[Dict[str, Any]] = []
         for item in resources[:8]:
+            normalized_pan_type = self._normalize_pan_type(
+                item.get("pan_type"),
+                item.get("title") or "",
+            )
             resource_results.append(
                 {
                     "slug": item.get("slug"),
@@ -159,7 +163,7 @@ class WeComCommandService:
                     "is_unlocked": item.get("is_unlocked", False),
                     "video_resolution": item.get("video_resolution", []),
                     "source": item.get("source", []),
-                    "pan_type": item.get("pan_type"),  # 添加网盘类型
+                    "pan_type": normalized_pan_type,
                     "tmdb_id": str(target.get("id")),
                     "series_name": target.get("name") or target.get("original_name") or "",
                 }
@@ -188,24 +192,13 @@ class WeComCommandService:
             if max_points and points > max_points:
                 extra += " 超过积分上限"
             
-            # 添加网盘类型标志
-            pan_type = item.get("pan_type") or ""
-            pan_badge = ""
-            if pan_type:
-                if pan_type == "115":
-                    pan_badge = "[115]"
-                elif pan_type in ("ali", "aliyun"):
-                    pan_badge = "[阿里云盘]"
-                elif pan_type == "quark":
-                    pan_badge = "[夸克]"
-                elif pan_type == "baidu":
-                    pan_badge = "[百度网盘]"
-                else:
-                    pan_badge = f"[{pan_type}]"
+            pan_type = (item.get("pan_type") or "").strip()
+            pan_name = self._pan_display_name(pan_type)
+            pan_badge = f"[{pan_name}]" if pan_name else "[网盘未知]"
             
             lines.append(
                 f"{idx}. {item['title']} {pan_badge}\n"
-                f"积分:{points} 分辨率:{resolutions} 来源:{sources}{extra}"
+                f"积分:{points} 网盘:{pan_name or '未知'} 分辨率:{resolutions} 来源:{sources}{extra}"
             )
 
         lines.append("")
@@ -259,10 +252,12 @@ class WeComCommandService:
                 logger.warning(f"保存企业微信解锁记录失败: {exc}")
 
         status_text = "已拥有该资源" if result.get("already_owned") else "解锁成功"
+        pan_type = (target.get("pan_type") or "").strip()
         lines = [
             status_text,
             f"剧集: {target.get('series_name') or '未知'}",
             f"资源: {target.get('title') or '未知'}",
+            f"网盘: {self._pan_display_name(pan_type) or '未知'}",
         ]
         if link:
             lines.append(f"链接: {link}")
@@ -378,3 +373,46 @@ class WeComCommandService:
             "4. 历史\n"
             "5. 重置"
         )
+
+    @staticmethod
+    def _pan_display_name(pan_type: str) -> str:
+        normalized = (pan_type or "").strip().lower()
+        if normalized in {"115"}:
+            return "115"
+        if normalized in {"ali", "aliyun", "alipan"}:
+            return "阿里云盘"
+        if normalized in {"quark"}:
+            return "夸克"
+        if normalized in {"baidu", "bd"}:
+            return "百度网盘"
+        if normalized in {"xunlei", "thunder"}:
+            return "迅雷"
+        return pan_type.strip()
+
+    @staticmethod
+    def _normalize_pan_type(pan_type: Any, title: str) -> str:
+        raw = str(pan_type or "").strip()
+        normalized = raw.lower()
+        if normalized in {"115"}:
+            return "115"
+        if normalized in {"ali", "aliyun", "alipan"}:
+            return "ali"
+        if normalized in {"quark"}:
+            return "quark"
+        if normalized in {"baidu", "bd"}:
+            return "baidu"
+        if normalized in {"xunlei", "thunder"}:
+            return "xunlei"
+
+        text = (title or "").strip().lower()
+        if "115" in text:
+            return "115"
+        if "阿里" in title or "aliyun" in text or "alipan" in text:
+            return "ali"
+        if "夸克" in title or "quark" in text:
+            return "quark"
+        if "百度" in title or "baidu" in text:
+            return "baidu"
+        if "迅雷" in title or "xunlei" in text or "thunder" in text:
+            return "xunlei"
+        return raw

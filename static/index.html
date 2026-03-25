@@ -467,6 +467,8 @@
 
         .config-section { display: none; }
         .config-section.active { display: block; }
+        .cfg-columns { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px 16px; }
+        @media (max-width: 900px) { .cfg-columns { grid-template-columns: 1fr; } }
 
         .cfg-tabs {
             position: sticky;
@@ -797,44 +799,50 @@
                 </div>
                 <form id="configForm" onsubmit="saveConfig(event)">
                     <div class="config-section active" id="cfgSection-emby">
-                        <div class="form-group">
+                        <div class="cfg-columns">
+                            <div class="form-group">
                             <label>Emby 服务器地址</label>
                             <input type="text" id="embyHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:8096">
                             <div class="cfg-help">填写你的 Emby 服务地址（含端口）</div>
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>Emby API 密钥</label>
                             <input type="text" id="embyApiKey" class="filter-select" style="width: 100%;" placeholder="在 Emby 设置 → API 中获取">
                             <div class="cfg-help">用于读取媒体库信息以及检测缺集</div>
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>TMDB API Key</label>
                             <input type="password" id="tmdbApiKey" class="filter-select" style="width: 100%;" placeholder="在 themoviedb.org 申请">
                             <div class="cfg-help">用于剧集搜索和匹配（通过 TMDB）</div>
+                            </div>
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-mp">
-                        <div class="form-group">
+                        <div class="cfg-columns">
+                            <div class="form-group">
                             <label>MoviePilot 地址</label>
                             <input type="text" id="mpHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:3000">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>MoviePilot 用户名</label>
                             <input type="text" id="mpUsername" class="filter-select" style="width: 100%;" value="admin">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>MoviePilot 密码</label>
                             <input type="password" id="mpPassword" class="filter-select" style="width: 100%;">
+                            </div>
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-hdhive">
-                        <div class="form-group">
+                        <div class="cfg-columns">
+                            <div class="form-group">
                             <label>HDHive API Key</label>
                             <input type="password" id="hdhiveApiKey" class="filter-select" style="width: 100%;" placeholder="在 HDHive 设置中获取 API Key">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>API 地址</label>
                             <input type="text" id="hdhiveBaseUrl" class="filter-select" style="width: 100%;" value="https://hdhive.com/api/open" placeholder="https://hdhive.com/api/open">
+                            </div>
                         </div>
                         <div style="margin-top:10px; padding: 10px; background: #1a1a2e; border-radius: 8px; display:none;">
                             <div class="form-group">
@@ -885,39 +893,41 @@
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-wecom">
-                        <div class="form-group">
+                        <div class="cfg-columns">
+                            <div class="form-group">
                             <label style="display: flex; align-items: center; gap: 8px;">
                                 <input type="checkbox" id="wecomEnabled" style="width: auto;">
                                 启用企业微信搜剧解锁
                             </label>
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>企业 ID CorpID</label>
                             <input type="text" id="wecomCorpId" class="filter-select" style="width: 100%;" placeholder="wwxxxxxxxxxxxxxxxx">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>应用 AgentId</label>
                             <input type="number" id="wecomAgentId" class="filter-select" style="width: 100%;" placeholder="1000002">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>应用 Secret</label>
                             <input type="password" id="wecomCorpSecret" class="filter-select" style="width: 100%;" placeholder="用于获取 AccessToken">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>回调 Token</label>
                             <input type="password" id="wecomToken" class="filter-select" style="width: 100%;" placeholder="企业微信回调配置中的 Token">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>回调 EncodingAESKey</label>
                             <input type="password" id="wecomEncodingAesKey" class="filter-select" style="width: 100%;" placeholder="43 位 EncodingAESKey">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>API 地址</label>
                             <input type="text" id="wecomBaseUrl" class="filter-select" style="width: 100%;" value="https://qyapi.weixin.qq.com/cgi-bin">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>回调地址</label>
                             <input type="text" id="wecomCallbackUrl" class="filter-select" style="width: 100%;" readonly>
+                            </div>
                         </div>
                         <div id="wecomStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
                         <div style="display: flex; gap: 10px; margin-top: 10px;">
@@ -928,30 +938,34 @@
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-global">
-                        <div class="form-group">
+                        <div class="cfg-columns">
+                            <div class="form-group">
                             <label>登录用户名</label>
                             <input type="text" id="adminUsername" class="filter-select" style="width: 100%;" placeholder="管理员用户名">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>修改管理员密码</label>
                             <input type="password" id="adminPassword" class="filter-select" style="width: 100%;" placeholder="留空则不修改">
+                            </div>
                         </div>
                         <hr style="margin: 16px 0; border-color: #444;">
                         <div class="form-group" style="display:flex;align-items:center;gap:8px;">
                             <input type="checkbox" id="globalProxyEnabled" style="width:auto;">
                             <label style="margin:0;">启用全局代理</label>
                         </div>
-                        <div class="form-group">
+                        <div class="cfg-columns">
+                            <div class="form-group">
                             <label>代理地址</label>
                             <input type="text" id="globalProxyHost" class="filter-select" style="width: 100%;" placeholder="127.0.0.1">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>代理端口</label>
                             <input type="number" id="globalProxyPort" class="filter-select" style="width: 100%;" placeholder="7890">
-                        </div>
-                        <div class="form-group">
+                            </div>
+                            <div class="form-group">
                             <label>代理用户名（可选）</label>
                             <input type="text" id="globalProxyUser" class="filter-select" style="width: 100%;" placeholder="">
+                            </div>
                         </div>
                     </div>
                 </form>

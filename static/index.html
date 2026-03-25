@@ -2786,7 +2786,7 @@
                                 <p style="margin-bottom:5px;">链接: <a href="${url}" target="_blank" style="color:#667eea;">${url}</a></p>
                                 ${code ? `<p>访问码: <span style="color:#fbbf24;font-weight:bold;">${code}</span></p>` : ''}
                             </div>
-                            <button class="btn btn-primary" style="margin-top:10px;" onclick="copyAndClose()">复制并关闭</button>
+                            <button class="btn btn-primary" style="margin-top:10px;" onclick="event.stopPropagation(); copyAndClose()">复制并关闭</button>
                         </div>
                     `;
                 } else {

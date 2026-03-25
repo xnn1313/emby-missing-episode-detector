@@ -468,6 +468,46 @@
         .config-section { display: none; }
         .config-section.active { display: block; }
 
+        .cfg-tabs {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .cfg-tab {
+            border-radius: 10px;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-body);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .cfg-tab.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+        .config-section .form-group {
+            margin-bottom: 14px;
+        }
+        .config-section .form-group label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            display: block;
+        }
+        .cfg-help {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
         .login-card {
             width: 100%;
             max-width: 420px;
@@ -745,12 +785,12 @@
                 <h2>配置</h2>
             </div>
             <div class="stat-card" style="max-width: 960px;">
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-                    <button class="btn btn-outline" id="cfgTab-emby" onclick="showConfigTab('emby')"><i class="fas fa-tv"></i> Emby</button>
-                    <button class="btn btn-outline" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
-                    <button class="btn btn-outline" id="cfgTab-hdhive" onclick="showConfigTab('hdhive')"><i class="fas fa-hive"></i> HDHive</button>
-                    <button class="btn btn-outline" id="cfgTab-wecom" onclick="showConfigTab('wecom')"><i class="fas fa-building"></i> 企业微信</button>
-                    <button class="btn btn-outline" id="cfgTab-global" onclick="showConfigTab('global')"><i class="fas fa-globe"></i> 全局</button>
+                <div class="cfg-tabs">
+                    <button class="cfg-tab" id="cfgTab-emby" onclick="showConfigTab('emby')"><i class="fas fa-tv"></i> Emby</button>
+                    <button class="cfg-tab" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
+                    <button class="cfg-tab" id="cfgTab-hdhive" onclick="showConfigTab('hdhive')"><i class="fas fa-hive"></i> HDHive</button>
+                    <button class="cfg-tab" id="cfgTab-wecom" onclick="showConfigTab('wecom')"><i class="fas fa-building"></i> 企业微信</button>
+                    <button class="cfg-tab" id="cfgTab-global" onclick="showConfigTab('global')"><i class="fas fa-globe"></i> 全局</button>
                     <div style="margin-left:auto;">
                         <button class="btn btn-primary" onclick="saveConfig(event)"><i class="fas fa-save"></i> 保存</button>
                     </div>
@@ -760,14 +800,17 @@
                         <div class="form-group">
                             <label>Emby 服务器地址</label>
                             <input type="text" id="embyHost" class="filter-select" style="width: 100%;" placeholder="http://192.168.1.100:8096">
+                            <div class="cfg-help">填写你的 Emby 服务地址（含端口）</div>
                         </div>
                         <div class="form-group">
                             <label>Emby API 密钥</label>
                             <input type="text" id="embyApiKey" class="filter-select" style="width: 100%;" placeholder="在 Emby 设置 → API 中获取">
+                            <div class="cfg-help">用于读取媒体库信息以及检测缺集</div>
                         </div>
                         <div class="form-group">
                             <label>TMDB API Key</label>
                             <input type="password" id="tmdbApiKey" class="filter-select" style="width: 100%;" placeholder="在 themoviedb.org 申请">
+                            <div class="cfg-help">用于剧集搜索和匹配（通过 TMDB）</div>
                         </div>
                     </div>
                     <div class="config-section" id="cfgSection-mp">

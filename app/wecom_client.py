@@ -203,6 +203,74 @@ class WeComClient:
         logger.info(f"企业微信消息发送成功: {user_id}")
         return data
 
+    def upload_media_image_url(self, image_url: str) -> Optional[str]:
+        """下载远程图片并上传为企业微信临时素材，返回 media_id。失败返回 None。"""
+        if not self.can_send():
+            return None
+        try:
+            img_resp = self.http.get(image_url, timeout=15.0, follow_redirects=True)
+            if img_resp.status_code != 200:
+                logger.warning(f"下载图片失败: {image_url} status={img_resp.status_code}")
+                return None
+            content_type = img_resp.headers.get("content-type", "image/jpeg")
+            if "png" in content_type:
+                ext = "png"
+            elif "webp" in content_type:
+                ext = "webp"
+            else:
+                ext = "jpg"
+            token = self.get_access_token()
+            upload_resp = self.http.post(
+                f"{self.base_url}/media/upload",
+                params={"access_token": token, "type": "image"},
+                files={"media": (f"poster.{ext}", img_resp.content, content_type)},
+                timeout=30.0,
+            )
+            upload_data = upload_resp.json()
+            if upload_data.get("errcode", 0) != 0:
+                logger.warning(f"企业微信上传素材失败: {upload_data}")
+                return None
+            media_id = upload_data.get("media_id")
+            logger.info(f"企业微信临时素材上传成功: media_id={media_id}")
+            return media_id
+        except Exception as exc:
+            logger.warning(f"企业微信上传图片异常: {exc}")
+            return None
+
+    def send_image_message(self, user_id: str, media_id: str) -> Dict[str, Any]:
+        """发送图片消息（使用临时素材 media_id）"""
+        token = self.get_access_token()
+        data = self._request(
+            "POST",
+            "/message/send",
+            params={"access_token": token},
+            json={
+                "touser": user_id,
+                "msgtype": "image",
+                "agentid": self.config.agent_id,
+                "image": {"media_id": media_id},
+            },
+        )
+        logger.info(f"企业微信图片消息发送成功: {user_id}")
+        return data
+
+    def send_news_message(self, user_id: str, articles: list) -> Dict[str, Any]:
+        """发送图文消息（mpnews 样式，最多 8 条）"""
+        token = self.get_access_token()
+        data = self._request(
+            "POST",
+            "/message/send",
+            params={"access_token": token},
+            json={
+                "touser": user_id,
+                "msgtype": "textcard",
+                "agentid": self.config.agent_id,
+                "textcard": articles[0] if articles else {},
+            },
+        )
+        logger.info(f"企业微信文字卡片消息发送成功: {user_id}")
+        return data
+
     def verify_callback_url(self, signature: str, timestamp: str, nonce: str, echostr: str) -> str:
         if not self.crypto:
             raise WeComError("企业微信回调加解密未配置")

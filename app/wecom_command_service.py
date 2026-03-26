@@ -30,28 +30,30 @@ class WeComCommandService:
         hdhive_client: Any,
         db: Any,
         config_manager: Any,
+        wecom_client: Any = None,
     ) -> str:
         text = " ".join((content or "").strip().split())
         if not text:
             return self._help_text()
 
-        if text in {"帮助", "help", "菜单", "?"}:
+        if text in {"\u5e2e\u52a9", "help", "\u83dc\u5355", "?"}:
             return self._help_text()
 
-        if text == "重置":
+        if text == "\u91cd\u7f6e":
             self._clear_session(user_id, db=db)
-            return "会话已重置。\n发送“搜索 剧名”重新开始。"
+            return "\u4f1a\u8bdd\u5df2\u91cd\u7f6e\u3002\n\u53d1\u9001\u201c\u641c\u7d22 \u5267\u540d\u201d\u91cd\u65b0\u5f00\u59cb\u3002"
 
-        search_match = re.match(r"^(搜索|搜剧|search)\s+(.+)$", text, flags=re.IGNORECASE)
+        search_match = re.match(r"^(\u641c\u7d22|\u641c\u5267|search)\s+(.+)$", text, flags=re.IGNORECASE)
         if search_match:
             return self._search_series(
                 user_id=user_id,
                 keyword=search_match.group(2).strip(),
                 tmdb_client=tmdb_client,
                 db=db,
+                wecom_client=wecom_client,
             )
 
-        resource_match = re.match(r"^(资源|res)\s+(\d+)$", text, flags=re.IGNORECASE)
+        resource_match = re.match(r"^(\u8d44\u6e90|res)\s+(\d+)$", text, flags=re.IGNORECASE)
         if resource_match:
             return self._search_resources(
                 user_id=user_id,
@@ -61,7 +63,7 @@ class WeComCommandService:
                 db=db,
             )
 
-        unlock_match = re.match(r"^(解锁|unlock)\s+(\d+)$", text, flags=re.IGNORECASE)
+        unlock_match = re.match(r"^(\u89e3\u9501|unlock)\s+(\d+)$", text, flags=re.IGNORECASE)
         if unlock_match:
             return self._unlock_resource(
                 user_id=user_id,
@@ -71,26 +73,26 @@ class WeComCommandService:
                 config_manager=config_manager,
             )
 
-        if text == "历史":
+        if text == "\u5386\u53f2":
             return self._latest_history(db)
 
         return (
-            "无法识别命令。\n\n"
+            "\u65e0\u6cd5\u8bc6\u522b\u547d\u4ee4\u3002\n\n"
             f"{self._help_text()}"
         )
 
-    def _search_series(self, user_id: str, keyword: str, tmdb_client: Any, db: Any = None) -> str:
+    def _search_series(self, user_id: str, keyword: str, tmdb_client: Any, db: Any = None, wecom_client: Any = None) -> str:
         if tmdb_client is None:
-            return "TMDB 未配置，无法按剧名搜索。请先在系统里配置 TMDB API Key。"
+            return "TMDB \u672a\u914d\u7f6e\uff0c\u65e0\u6cd5\u6309\u5267\u540d\u641c\u7d22\u3002\u8bf7\u5148\u5728\u7cfb\u7edf\u91cc\u914d\u7f6e TMDB API Key\u3002"
 
         try:
             candidates = tmdb_client.search_tv_series_candidates(keyword, limit=5)
         except Exception as exc:
-            logger.error(f"企业微信搜剧失败: {exc}")
-            return f"搜剧失败：{exc}"
+            logger.error(f"\u4f01\u4e1a\u5fae\u4fe1\u641c\u5267\u5931\u8d25: {exc}")
+            return f"\u641c\u5267\u5931\u8d25\uff1a{exc}"
 
         if not candidates:
-            return f"没有找到“{keyword}”的剧集候选。"
+            return f"\u6ca1\u6709\u627e\u5230\u201c{keyword}\u201d\u7684\u5267\u96c6\u5019\u9009\u3002"
 
         self._set_session(
             user_id,
@@ -102,16 +104,40 @@ class WeComCommandService:
             db=db,
         )
 
-        lines = [f"找到 {len(candidates)} 个候选："]
+        lines = [f"\u627e\u5230 {len(candidates)} \u4e2a\u5019\u9009\uff1a"]
+        first_poster_url = ""
         for idx, item in enumerate(candidates, start=1):
             air_date = item.get("first_air_date") or ""
-            title = item.get("name") or item.get("original_name") or "未知剧名"
+            title = item.get("name") or item.get("original_name") or "\u672a\u77e5\u5267\u540d"
             tmdb_id = item.get("id")
             lines.append(f"{idx}. {title} {f'({air_date})' if air_date else ''} [TMDB:{tmdb_id}]")
+            if not first_poster_url and item.get("poster_path"):
+                first_poster_url = f"https://image.tmdb.org/t/p/w342{item['poster_path']}"
 
         lines.append("")
-        lines.append("回复“资源 序号”查看 HDHive 资源，例如：资源 1")
-        return "\n".join(lines)
+        lines.append("\u56de\u590d\u201c\u8d44\u6e90 \u5e8f\u53f7\u201d\u67e5\u770b HDHive \u8d44\u6e90\uff0c\u4f8b\u5982\uff1a\u8d44\u6e90 1")
+        text_reply = "\n".join(lines)
+
+        # 尝试发送第一个结果的海报图片（异步，不影响文字回复）
+        if first_poster_url and wecom_client is not None:
+            try:
+                self._send_poster_async(wecom_client, user_id, first_poster_url)
+            except Exception as exc:
+                logger.warning(f"\u4f01\u4e1a\u5fae\u4fe1\u5f02\u6b65\u53d1\u9001\u6d77\u62a5\u5931\u8d25: {exc}")
+
+        return text_reply
+
+    def _send_poster_async(self, wecom_client: Any, user_id: str, poster_url: str) -> None:
+        """在后台线程中上传海报并发送图片消息"""
+        def _do():
+            try:
+                media_id = wecom_client.upload_media_image_url(poster_url)
+                if media_id:
+                    wecom_client.send_image_message(user_id, media_id)
+            except Exception as exc:
+                logger.warning(f"\u4f01\u4e1a\u5fae\u4fe1\u53d1\u9001\u6d77\u62a5\u56fe\u7247\u5931\u8d25: {exc}")
+
+        threading.Thread(target=_do, daemon=True).start()
 
     def _search_resources(
         self,
@@ -122,15 +148,15 @@ class WeComCommandService:
         db: Any = None,
     ) -> str:
         if hdhive_client is None:
-            return "HDHive 未配置，无法查询资源。"
+            return "HDHive \u672a\u914d\u7f6e\uff0c\u65e0\u6cd5\u67e5\u8be2\u8d44\u6e90\u3002"
 
         session = self._get_session(user_id, db=db)
         tmdb_results = session.get("tmdb_results", [])
         if not tmdb_results:
-            return "没有可用的搜剧结果。请先发送“搜索 剧名”。"
+            return "\u6ca1\u6709\u53ef\u7528\u7684\u641c\u5267\u7ed3\u679c\u3002\u8bf7\u5148\u53d1\u9001\u201c\u641c\u7d22 \u5267\u540d\u201d\u3002"
 
         if index < 1 or index > len(tmdb_results):
-            return f"序号无效，请输入 1 到 {len(tmdb_results)}。"
+            return f"\u5e8f\u53f7\u65e0\u6548\uff0c\u8bf7\u8f93\u5165 1 \u5230 {len(tmdb_results)}\u3002"
 
         target = tmdb_results[index - 1]
         prefer_115 = True
@@ -143,11 +169,11 @@ class WeComCommandService:
                 prefer_115=prefer_115,
             )
         except Exception as exc:
-            logger.error(f"企业微信查询资源失败: {exc}")
-            return f"查询资源失败：{exc}"
+            logger.error(f"\u4f01\u4e1a\u5fae\u4fe1\u67e5\u8be2\u8d44\u6e90\u5931\u8d25: {exc}")
+            return f"\u67e5\u8be2\u8d44\u6e90\u5931\u8d25\uff1a{exc}"
 
         if not resources:
-            return f"没有找到“{target.get('name', '未知剧名')}”的可用资源。"
+            return f"\u6ca1\u6709\u627e\u5230\u201c{target.get('name', '\u672a\u77e5\u5267\u540d')}\u201d\u7684\u53ef\u7528\u8d44\u6e90\u3002"
 
         resource_results: List[Dict[str, Any]] = []
         for item in resources[:8]:
@@ -158,7 +184,7 @@ class WeComCommandService:
             resource_results.append(
                 {
                     "slug": item.get("slug"),
-                    "title": item.get("title") or "未知资源",
+                    "title": item.get("title") or "\u672a\u77e5\u8d44\u6e90",
                     "unlock_points": item.get("unlock_points") or 0,
                     "is_unlocked": item.get("is_unlocked", False),
                     "video_resolution": item.get("video_resolution", []),
@@ -183,40 +209,39 @@ class WeComCommandService:
         if config_manager is not None:
             max_points = config_manager.get_hdhive_config().get("settings", {}).get("max_points_per_unlock", 0)
 
-        lines = [f"{target.get('name', '未知剧名')} 的资源如下："]
+        lines = [f"{target.get('name', '\u672a\u77e5\u5267\u540d')} \u7684\u8d44\u6e90\u5982\u4e0b\uff1a"]
         for idx, item in enumerate(resource_results, start=1):
             resolutions = "/".join(item.get("video_resolution") or []) or "-"
             sources = "/".join(item.get("source") or []) or "-"
             points = item.get("unlock_points", 0)
-            extra = " 已解锁" if item.get("is_unlocked") else ""
+            extra = " \u5df2\u89e3\u9501" if item.get("is_unlocked") else ""
             if max_points and points > max_points:
-                extra += " 超过积分上限"
-            
+                extra += " \u8d85\u8fc7\u79ef\u5206\u4e0a\u9650"
+
             pan_type = (item.get("pan_type") or "").strip()
             pan_name = self._pan_display_name(pan_type)
-            pan_badge = f"[{pan_name}]" if pan_name else "[网盘未知]"
-            
+            pan_badge = f"[{pan_name}]" if pan_name else "[\u7f51\u76d8\u672a\u77e5]"
+
             lines.append(
                 f"{idx}. {item['title']} {pan_badge}\n"
-                f"积分:{points} 网盘:{pan_name or '未知'} 分辨率:{resolutions} 来源:{sources}{extra}"
+                f"\u79ef\u5206:{points} \u7f51\u76d8:{pan_name or '\u672a\u77e5'} \u5206\u8fa8\u7387:{resolutions} \u6765\u6e90:{sources}{extra}"
             )
 
         lines.append("")
-        lines.append("回复“解锁 序号”获取链接，例如：解锁 1")
+        lines.append("\u56de\u590d\u201c\u89e3\u9501 \u5e8f\u53f7\u201d\u83b7\u53d6\u94fe\u63a5\uff0c\u4f8b\u5982\uff1a\u89e3\u9501 1")
         return "\n".join(lines)
-
 
     def _unlock_resource(self, user_id: str, index: int, hdhive_client: Any, db: Any, config_manager: Any) -> str:
         if hdhive_client is None:
-            return "HDHive 未配置，无法解锁资源。"
+            return "HDHive \u672a\u914d\u7f6e\uff0c\u65e0\u6cd5\u89e3\u9501\u8d44\u6e90\u3002"
 
         session = self._get_session(user_id, db=db)
         resource_results = session.get("resource_results", [])
         if not resource_results:
-            return "没有可用的资源列表。请先发送“搜索 剧名”，再发送“资源 序号”。"
+            return "\u6ca1\u6709\u53ef\u7528\u7684\u8d44\u6e90\u5217\u8868\u3002\u8bf7\u5148\u53d1\u9001\u201c\u641c\u7d22 \u5267\u540d\u201d\uff0c\u518d\u53d1\u9001\u201c\u8d44\u6e90 \u5e8f\u53f7\u201d\u3002"
 
         if index < 1 or index > len(resource_results):
-            return f"序号无效，请输入 1 到 {len(resource_results)}。"
+            return f"\u5e8f\u53f7\u65e0\u6548\uff0c\u8bf7\u8f93\u5165 1 \u5230 {len(resource_results)}\u3002"
 
         target = resource_results[index - 1]
         points = int(target.get("unlock_points", 0) or 0)
@@ -225,18 +250,18 @@ class WeComCommandService:
         if config_manager is not None:
             max_points = config_manager.get_hdhive_config().get("settings", {}).get("max_points_per_unlock", 0)
         if max_points and points > max_points:
-            return f"该资源需要 {points} 积分，超过当前限制 {max_points}，已阻止解锁。"
+            return f"\u8be5\u8d44\u6e90\u9700\u8981 {points} \u79ef\u5206\uff0c\u8d85\u8fc7\u5f53\u524d\u9650\u5236 {max_points}\uff0c\u5df2\u963b\u6b62\u89e3\u9501\u3002"
 
         try:
             result = hdhive_client.unlock_resource(target["slug"])
         except Exception as exc:
-            logger.error(f"企业微信解锁失败: {exc}")
-            return f"解锁失败：{exc}"
+            logger.error(f"\u4f01\u4e1a\u5fae\u4fe1\u89e3\u9501\u5931\u8d25: {exc}")
+            return f"\u89e3\u9501\u5931\u8d25\uff1a{exc}"
 
         link = result.get("full_url") or result.get("url") or ""
         access_code = result.get("access_code", "")
-        if link and access_code and "提取码" not in link and "pwd=" not in link:
-            link = f"{link} 提取码: {access_code}"
+        if link and access_code and "\u63d0\u53d6\u7801" not in link and "pwd=" not in link:
+            link = f"{link} \u63d0\u53d6\u7801: {access_code}"
 
         if db is not None and link:
             try:
@@ -250,43 +275,88 @@ class WeComCommandService:
                     points_spent=int(result.get("points_spent", points) or points),
                 )
             except Exception as exc:
-                logger.warning(f"保存企业微信解锁记录失败: {exc}")
+                logger.warning(f"\u4fdd\u5b58\u4f01\u4e1a\u5fae\u4fe1\u89e3\u9501\u8bb0\u5f55\u5931\u8d25: {exc}")
 
-        status_text = "已拥有该资源" if result.get("already_owned") else "解锁成功"
+        status_text = "\u5df2\u62e5\u6709\u8be5\u8d44\u6e90" if result.get("already_owned") else "\u89e3\u9501\u6210\u529f"
         pan_type = (target.get("pan_type") or "").strip()
         lines = [
             status_text,
-            f"剧集: {target.get('series_name') or '未知'}",
-            f"资源: {target.get('title') or '未知'}",
-            f"网盘: {self._pan_display_name(pan_type) or '未知'}",
+            f"\u5267\u96c6: {target.get('series_name') or '\u672a\u77e5'}",
+            f"\u8d44\u6e90: {target.get('title') or '\u672a\u77e5'}",
+            f"\u7f51\u76d8: {self._pan_display_name(pan_type) or '\u672a\u77e5'}",
         ]
         if link:
-            lines.append(f"链接: {link}")
-        if access_code and "提取码" not in link:
-            lines.append(f"提取码: {access_code}")
+            lines.append(f"\u94fe\u63a5: {link}")
+        if access_code and "\u63d0\u53d6\u7801" not in link:
+            lines.append(f"\u63d0\u53d6\u7801: {access_code}")
 
         spent = result.get("points_spent")
         if spent is None:
             spent = points
-        lines.append(f"积分消耗: {spent}")
+        lines.append(f"\u79ef\u5206\u6d88\u8017: {spent}")
+
+        # 尝试自动转存到 Symedia
+        raw_url = result.get("full_url") or result.get("url") or ""
+        if raw_url and config_manager is not None:
+            transfer_result = self._transfer_to_symedia(raw_url, access_code, config_manager)
+            if transfer_result:
+                lines.append(transfer_result)
+
         return "\n".join(lines)
+
+    def _transfer_to_symedia(self, url: str, access_code: str, config_manager: Any) -> str:
+        """调用 Symedia 转存接口，返回结果提示文字。"""
+        try:
+            cfg = config_manager.get_symedia_config()
+        except Exception:
+            return ""
+        host = (cfg.get("host") or "").strip()
+        if not host or not cfg.get("enabled", True):
+            return ""
+        token = (cfg.get("token") or "symedia").strip() or "symedia"
+        parent_id = str(cfg.get("parent_id") or "0").strip() or "0"
+
+        full_url = url
+        if access_code and "password=" not in full_url:
+            sep = "&" if "?" in full_url else "?"
+            full_url = f"{full_url}{sep}password={access_code}"
+
+        import httpx
+        api_url = f"{host.rstrip('/')}/api/v1/plugin/cloud_helper/add_share_urls_115"
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                resp = client.post(
+                    api_url,
+                    params={"token": token},
+                    json={"urls": [full_url], "parent_id": parent_id},
+                    headers={"Content-Type": "application/json"},
+                )
+            if resp.status_code == 200:
+                logger.info(f"\u4f01\u4e1a\u5fae\u4fe1\u89e3\u9501\u540e Symedia \u8f6c\u5b58\u6210\u529f: {url}")
+                return "\u2705 \u5df2\u81ea\u52a8\u8f6c\u5b58\u5230 Symedia"
+            else:
+                logger.warning(f"Symedia \u8f6c\u5b58\u5931\u8d25: status={resp.status_code}")
+                return f"\u26a0\ufe0f \u8f6c\u5b58\u5931\u8d25(HTTP {resp.status_code})"
+        except Exception as exc:
+            logger.warning(f"Symedia \u8f6c\u5b58\u5f02\u5e38: {exc}")
+            return f"\u26a0\ufe0f \u8f6c\u5b58\u5f02\u5e38: {exc}"
 
     def _latest_history(self, db: Any) -> str:
         if db is None:
-            return "数据库未初始化，无法查看解锁历史。"
+            return "\u6570\u636e\u5e93\u672a\u521d\u59cb\u5316\uff0c\u65e0\u6cd5\u67e5\u770b\u89e3\u9501\u5386\u53f2\u3002"
 
         try:
             records = db.get_hdhive_unlocks(limit=5)
         except Exception as exc:
-            logger.error(f"获取企业微信解锁历史失败: {exc}")
-            return f"读取历史失败：{exc}"
+            logger.error(f"\u83b7\u53d6\u4f01\u4e1a\u5fae\u4fe1\u89e3\u9501\u5386\u53f2\u5931\u8d25: {exc}")
+            return f"\u8bfb\u53d6\u5386\u53f2\u5931\u8d25\uff1a{exc}"
 
         if not records:
-            return "暂无解锁历史。"
+            return "\u6682\u65e0\u89e3\u9501\u5386\u53f2\u3002"
 
-        lines = ["最近 5 条解锁记录："]
+        lines = ["\u6700\u8fd1 5 \u6761\u89e3\u9501\u8bb0\u5f55\uff1a"]
         for idx, item in enumerate(records, start=1):
-            title = item.get("title") or item.get("series_name") or item.get("slug") or "未知"
+            title = item.get("title") or item.get("series_name") or item.get("slug") or "\u672a\u77e5"
             unlocked_at = item.get("unlocked_at") or "-"
             lines.append(f"{idx}. {title} | {unlocked_at}")
         return "\n".join(lines)
@@ -304,7 +374,7 @@ class WeComCommandService:
             try:
                 db.save_wecom_session(user_id, payload)
             except Exception as exc:
-                logger.warning(f"保存企业微信会话失败: {exc}")
+                logger.warning(f"\u4fdd\u5b58\u4f01\u4e1a\u5fae\u4fe1\u4f1a\u8bdd\u5931\u8d25: {exc}")
 
     def _get_session(self, user_id: str, db: Any = None) -> Dict[str, Any]:
         with self._lock:
@@ -321,7 +391,7 @@ class WeComCommandService:
                 try:
                     db.save_wecom_session(user_id, payload)
                 except Exception as exc:
-                    logger.warning(f"刷新企业微信会话失败: {exc}")
+                    logger.warning(f"\u5237\u65b0\u4f01\u4e1a\u5fae\u4fe1\u4f1a\u8bdd\u5931\u8d25: {exc}")
             return dict(payload)
 
         if db is None:
@@ -330,7 +400,7 @@ class WeComCommandService:
         try:
             payload = db.get_wecom_session(user_id, self.SESSION_TTL_SECONDS)
         except Exception as exc:
-            logger.warning(f"读取企业微信会话失败: {exc}")
+            logger.warning(f"\u8bfb\u53d6\u4f01\u4e1a\u5fae\u4fe1\u4f1a\u8bdd\u5931\u8d25: {exc}")
             return {}
 
         if not payload:
@@ -352,7 +422,7 @@ class WeComCommandService:
             try:
                 db.delete_wecom_session(user_id)
             except Exception as exc:
-                logger.warning(f"删除企业微信会话失败: {exc}")
+                logger.warning(f"\u5220\u9664\u4f01\u4e1a\u5fae\u4fe1\u4f1a\u8bdd\u5931\u8d25: {exc}")
 
     def _cleanup_expired_locked(self):
         now = time.time()
@@ -367,12 +437,12 @@ class WeComCommandService:
     @staticmethod
     def _help_text() -> str:
         return (
-            "可用命令：\n"
-            "1. 搜索 剧名\n"
-            "2. 资源 序号\n"
-            "3. 解锁 序号\n"
-            "4. 历史\n"
-            "5. 重置"
+            "\u53ef\u7528\u547d\u4ee4\uff1a\n"
+            "1. \u641c\u7d22 \u5267\u540d\n"
+            "2. \u8d44\u6e90 \u5e8f\u53f7\n"
+            "3. \u89e3\u9501 \u5e8f\u53f7\n"
+            "4. \u5386\u53f2\n"
+            "5. \u91cd\u7f6e"
         )
 
     @staticmethod
@@ -381,13 +451,13 @@ class WeComCommandService:
         if normalized in {"115"}:
             return "115"
         if normalized in {"ali", "aliyun", "alipan"}:
-            return "阿里云盘"
+            return "\u963f\u91cc\u4e91\u76d8"
         if normalized in {"quark"}:
-            return "夸克"
+            return "\u5938\u514b"
         if normalized in {"baidu", "bd"}:
-            return "百度网盘"
+            return "\u767e\u5ea6\u7f51\u76d8"
         if normalized in {"xunlei", "thunder"}:
-            return "迅雷"
+            return "\u8fc5\u96f7"
         return pan_type.strip()
 
     @staticmethod
@@ -408,12 +478,12 @@ class WeComCommandService:
         text = (title or "").strip().lower()
         if "115" in text:
             return "115"
-        if "阿里" in title or "aliyun" in text or "alipan" in text:
+        if "\u963f\u91cc" in title or "aliyun" in text or "alipan" in text:
             return "ali"
-        if "夸克" in title or "quark" in text:
+        if "\u5938\u514b" in title or "quark" in text:
             return "quark"
-        if "百度" in title or "baidu" in text:
+        if "\u767e\u5ea6" in title or "baidu" in text:
             return "baidu"
-        if "迅雷" in title or "xunlei" in text or "thunder" in text:
+        if "\u8fc5\u96f7" in title or "xunlei" in text or "thunder" in text:
             return "xunlei"
         return raw

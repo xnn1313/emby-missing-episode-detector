@@ -447,6 +447,7 @@ def _build_wecom_reply_text(
     current_hdhive_client: Any,
     current_db: Any,
     current_config_manager: Any,
+    current_wecom_client: Any = None,
 ) -> str:
     msg_type = (message.get("MsgType") or "").lower()
     from_user = message.get("FromUserName", "")
@@ -459,15 +460,16 @@ def _build_wecom_reply_text(
             hdhive_client=current_hdhive_client,
             db=current_db,
             config_manager=current_config_manager,
+            wecom_client=current_wecom_client,
         )
 
     if msg_type == "event":
         return (
-            "已接入剧集搜索。\n"
-            "发送“搜索 剧名”开始，例如：搜索 黑镜"
+            "\u5df2\u63a5\u5165\u5267\u96c6\u641c\u7d22\u3002\n"
+            "\u53d1\u9001\u201c\u641c\u7d22 \u5267\u540d\u201d\u5f00\u59cb\uff0c\u4f8b\u5982\uff1a\u641c\u7d22 \u9ed1\u955c"
         )
 
-    return "当前只支持文本命令。\n发送“帮助”查看用法。"
+    return "\u5f53\u524d\u53ea\u652f\u6301\u6587\u672c\u547d\u4ee4\u3002\n\u53d1\u9001\u201c\u5e2e\u52a9\u201d\u67e5\u770b\u7528\u6cd5\u3002"
 
 
 def _process_wecom_message_async(
@@ -490,6 +492,7 @@ def _process_wecom_message_async(
             current_hdhive_client=current_hdhive_client,
             current_db=current_db,
             current_config_manager=current_config_manager,
+            current_wecom_client=current_wecom_client,
         )
 
         current_wecom_client.send_text_message(from_user, reply_text)
@@ -991,174 +994,6 @@ async def search_tmdb_candidates(
         )
 
     return {"status": "success", "count": len(normalized), "candidates": normalized}
-
-
-@app.get("/api/tmdb/feed")
-async def get_tmdb_feed(
-    feed: str = "on_the_air",
-    page: int = 1,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    global config_manager, tmdb_client
-
-    if config_manager is None:
-        config_manager = get_config_manager()
-
-    tmdb_config = config_manager.get_tmdb_config() if config_manager else {}
-    all_config = config_manager.get_all_config() if config_manager else {}
-    tmdb_proxy_url = _build_proxy_url((all_config.get("hdhive") or {}).get("proxy"))
-    tmdb_api_key = (tmdb_config.get("api_key") or "").strip()
-
-    if not tmdb_api_key:
-        raise HTTPException(status_code=400, detail="请先在配置中设置 TMDB API Key")
-
-    safe_page = max(1, min(int(page or 1), 500))
-
-    temp_client: Optional[TMDBClient] = None
-    client = tmdb_client
-    if client is None:
-        temp_client = TMDBClient(api_key=tmdb_api_key, language="zh-CN", proxy_url=tmdb_proxy_url)
-        client = temp_client
-
-    try:
-        payload = client.get_tv_feed(feed=feed, page=safe_page)
-    finally:
-        if temp_client is not None:
-            try:
-                temp_client.client.close()
-            except Exception:
-                pass
-
-    results = payload.get("results") or []
-    total_pages = int(payload.get("total_pages") or 0)
-
-    normalized = []
-    for item in results:
-        poster_path = item.get("poster_path") or ""
-        first_air_date = item.get("first_air_date") or ""
-        normalized.append(
-            {
-                "id": item.get("id"),
-                "name": item.get("name") or item.get("original_name") or "",
-                "original_name": item.get("original_name") or "",
-                "first_air_date": first_air_date,
-                "year": first_air_date[:4] if first_air_date else "",
-                "overview": item.get("overview") or "",
-                "poster_url": f"https://image.tmdb.org/t/p/w342{poster_path}" if poster_path else "",
-                "vote_average": item.get("vote_average"),
-                "vote_count": item.get("vote_count"),
-                "popularity": item.get("popularity"),
-                "origin_country": item.get("origin_country") or [],
-            }
-        )
-
-    has_more = total_pages > 0 and safe_page < total_pages
-    return {
-        "status": "success",
-        "feed": feed,
-        "items": normalized,
-        "pagination": {
-            "page": safe_page,
-            "total_pages": total_pages,
-            "has_more": has_more,
-        },
-    }
-
-@app.post("/api/emby/in_library")
-async def check_in_library(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
-    global emby_client, config_manager
-    if emby_client is None:
-        raise HTTPException(status_code=400, detail="Emby 未配置")
-    ids = payload.get("tmdb_ids") or []
-    if not isinstance(ids, list) or not ids:
-        raise HTTPException(status_code=400, detail="缺少 tmdb_ids")
-    ids_norm = [str(x).strip() for x in ids if str(x).strip()]
-    lib_config = {}
-    try:
-        if config_manager is None:
-            config_manager = get_config_manager()
-        lib_config = (config_manager.get_library_config() or {})
-    except Exception:
-        lib_config = {}
-    library_ids = lib_config.get("selected_ids") if lib_config.get("enabled") else None
-    index = emby_client.get_series_provider_index(library_ids=library_ids)
-    results = []
-    for tmdb_id in ids_norm:
-        info = index.get(tmdb_id)
-        results.append(
-            {
-                "tmdb_id": tmdb_id,
-                "in_library": info is not None,
-                "series": info or {},
-            }
-        )
-    return {"status": "success", "count": len(results), "results": results}
-
-@app.get("/api/symedia/config")
-async def get_symedia_config(current_user: Dict[str, Any] = Depends(get_current_user)):
-    global config_manager
-    if config_manager is None:
-        config_manager = get_config_manager()
-    cfg = config_manager.get_symedia_config()
-    return {"status": "success", "config": cfg}
-
-@app.post("/api/symedia/config")
-async def set_symedia_config(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
-    global config_manager
-    if config_manager is None:
-        config_manager = get_config_manager()
-    host = (payload.get("host") or "").strip()
-    token = (payload.get("token") or "symedia").strip() or "symedia"
-    parent_id = str(payload.get("parent_id") or "0").strip() or "0"
-    enabled = bool(payload.get("enabled", True))
-    ok = config_manager.set_symedia_config(host=host, token=token, parent_id=parent_id, enabled=enabled)
-    if not ok:
-        raise HTTPException(status_code=500, detail="Symedia 配置保存失败")
-    return {"status": "success", "test_result": f"{'已启用' if enabled else '未启用'}"}
-
-@app.post("/api/symedia/transfer")
-async def symedia_transfer(payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
-    global config_manager
-    if config_manager is None:
-        config_manager = get_config_manager()
-    cfg = config_manager.get_symedia_config()
-    host = (cfg.get("host") or "").strip()
-    token = (cfg.get("token") or "symedia").strip() or "symedia"
-    parent_id = str(cfg.get("parent_id") or "0").strip() or "0"
-    if not host:
-        raise HTTPException(status_code=400, detail="Symedia 未配置")
-    urls = payload.get("urls")
-    url = payload.get("url")
-    if not urls and url:
-        urls = [url]
-    if not isinstance(urls, list) or not urls:
-        raise HTTPException(status_code=400, detail="缺少分享链接")
-    safe_urls = []
-    for u in urls:
-        s = str(u or "").strip()
-        if s:
-            safe_urls.append(s)
-    if not safe_urls:
-        raise HTTPException(status_code=400, detail="无效链接")
-    import httpx
-    api_url = f"{host.rstrip('/')}/api/v1/plugin/cloud_helper/add_share_urls_115"
-    params = {"token": token}
-    body = {"urls": safe_urls, "parent_id": parent_id}
-    try:
-        with httpx.Client(timeout=20.0) as client:
-            resp = client.post(api_url, params=params, json=body, headers={"Content-Type": "application/json"})
-        if resp.status_code == 200:
-            data = {}
-            try:
-                data = resp.json()
-            except Exception:
-                data = {"raw": resp.text}
-            return {"status": "success", "response": data}
-        raise HTTPException(status_code=resp.status_code, detail=resp.text or "Symedia API 错误")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/tmdb/{series_id}")

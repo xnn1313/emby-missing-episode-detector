@@ -1863,6 +1863,7 @@
         async function loadConfig() {
             try {
                 updateWeComCallbackUrl();
+                
                 const response = await authFetch('/api/config');
                 const data = await response.json();
                 if (data.status === 'success') {
@@ -1919,6 +1920,11 @@
                     document.getElementById('symediaHost').value = sc.host || '';
                     document.getElementById('symediaToken').value = sc.token || 'symedia';
                     document.getElementById('symediaParentId').value = sc.parent_id || '0';
+                } else {
+                    document.getElementById('symediaEnabled').checked = false;
+                    document.getElementById('symediaHost').value = '';
+                    document.getElementById('symediaToken').value = 'symedia';
+                    document.getElementById('symediaParentId').value = '0';
                 }
 
                 const meRes = await authFetch('/api/auth/me');
@@ -1928,6 +1934,8 @@
                     const userInput = document.getElementById('adminUsername');
                     if (userInput) userInput.value = window.currentAdminName;
                 }
+                
+                showConfigTab('emby');
             } catch (error) {
                 console.error('加载配置失败:', error);
             }
@@ -2299,15 +2307,7 @@
                 const sec = document.getElementById('cfgSection-' + t);
                 const btn = document.getElementById('cfgTab-' + t);
                 if (sec) sec.classList.toggle('active', t === name);
-                if (btn) {
-                    if (t === name) {
-                        btn.classList.remove('btn-outline');
-                        btn.classList.add('btn-primary');
-                    } else {
-                        btn.classList.add('btn-outline');
-                        btn.classList.remove('btn-primary');
-                    }
-                }
+                if (btn) btn.classList.toggle('active', t === name);
             });
         }
         

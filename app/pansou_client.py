@@ -42,19 +42,25 @@ class PanSouClient:
         return {}
 
     def search(self, kw: str, cloud_types: Optional[List[str]] = None) -> Dict[str, Any]:
-        """搜索网盘资源，返回原始响应 dict"""
-        payload: Dict[str, Any] = {"kw": kw, "res": "merge", "src": "all"}
+        """搜索网盘资源，返回 data 字段内容"""
+        params: Dict[str, Any] = {"kw": kw, "res": "merge"}
         if cloud_types:
-            payload["cloud_types"] = cloud_types
+            params["cloud_types"] = ",".join(cloud_types)
 
         try:
-            resp = self.http.post(
+            resp = self.http.get(
                 f"{self.base_url}/api/search",
-                json=payload,
+                params=params,
                 headers=self._headers(),
             )
             resp.raise_for_status()
-            return resp.json()
+            result = resp.json()
+            # PanSou API 返回格式: {"code": 0, "message": "success", "data": {...}}
+            if result.get("code") == 0:
+                return result.get("data", {})
+            else:
+                logger.error(f"PanSou API 返回错误: code={result.get('code')}, message={result.get('message')}")
+                return {}
         except Exception as exc:
             logger.error(f"PanSou 搜索失败: kw={kw}, error={exc}")
             raise

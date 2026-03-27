@@ -254,8 +254,27 @@ class WeComClient:
         logger.info(f"企业微信图片消息发送成功: {user_id}")
         return data
 
-    def send_news_message(self, user_id: str, articles: list) -> Dict[str, Any]:
+    def send_mpnews_message(self, user_id: str, articles: list) -> Dict[str, Any]:
         """发送图文消息（mpnews 样式，最多 8 条）"""
+        token = self.get_access_token()
+        data = self._request(
+            "POST",
+            "/message/send",
+            params={"access_token": token},
+            json={
+                "touser": user_id,
+                "msgtype": "mpnews",
+                "agentid": self.config.agent_id,
+                "mpnews": {
+                    "articles": articles[:8]
+                },
+            },
+        )
+        logger.info(f"企业微信图文消息发送成功：{user_id}")
+        return data
+
+    def send_textcard_message(self, user_id: str, title: str, description: str, url: str, picurl: str = "") -> Dict[str, Any]:
+        """发送文字卡片消息（单条图文）"""
         token = self.get_access_token()
         data = self._request(
             "POST",
@@ -265,12 +284,16 @@ class WeComClient:
                 "touser": user_id,
                 "msgtype": "textcard",
                 "agentid": self.config.agent_id,
-                "textcard": articles[0] if articles else {},
+                "textcard": {
+                    "title": title,
+                    "description": description,
+                    "url": url,
+                    "btntxt": "查看详情",
+                },
             },
         )
-        logger.info(f"企业微信文字卡片消息发送成功: {user_id}")
+        logger.info(f"企业微信文字卡片消息发送成功：{user_id}")
         return data
-
     def verify_callback_url(self, signature: str, timestamp: str, nonce: str, echostr: str) -> str:
         if not self.crypto:
             raise WeComError("企业微信回调加解密未配置")

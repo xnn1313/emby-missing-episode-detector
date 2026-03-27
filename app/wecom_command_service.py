@@ -104,28 +104,52 @@ class WeComCommandService:
             db=db,
         )
 
-        lines = [f"\u627e\u5230 {len(candidates)} \u4e2a\u5019\u9009\uff1a"]
-        first_poster_url = ""
+        # 构建图文消息（企业微信 mpnews 必须有 thumb_media_id 才能显示图片）
+        # 先上传第一张海报获取 media_id
+        first_media_id = None
+        if candidates and candidates[0].get("poster_path") and wecom_client is not None:
+            try:
+                first_poster_url = f"https://image.tmdb.org/t/p/w342{candidates[0]['poster_path']}"
+                first_media_id = wecom_client.upload_media_image_url(first_poster_url)
+                if first_media_id:
+                    logger.info(f"企业微信海报上传成功：media_id={first_media_id}")
+            except Exception as exc:
+                logger.warning(f"企业微信上传海报失败：{exc}")
+        
+        # 如果有 media_id，发送图文消息
+        if first_media_id and wecom_client is not None:
+            articles = []
+            for idx, item in enumerate(candidates[:8], start=1):
+                air_date = item.get("first_air_date") or ""
+                title = item.get("name") or item.get("original_name") or "未知剧名"
+                tmdb_id = item.get("id")
+                
+                articles.append({
+                    "title": f"{idx}. {title} ({air_date})",
+                    "thumb_media_id": first_media_id if idx == 1 else "",
+                    "author": "Emby 缺集检测",
+                    "content_source_url": "",
+                    "content": f"TMDB ID: {tmdb_id}\\n\\n回复'资源 {idx}'查看 HDHive 资源",
+                    "digest": f"TMDB:{tmdb_id} | 回复'资源 {idx}'查看详情",
+                    "show_cover_pic": 1 if idx == 1 else 0,
+                })
+            
+            try:
+                wecom_client.send_mpnews_message(user_id, articles)
+                return f"✅ 找到 {len(candidates)} 个候选，请查看图文消息\\n\\n回复'资源 序号'查看 HDHive 资源，例如：资源 1"
+            except Exception as exc:
+                logger.error(f"企业微信发送图文消息失败：{exc}")
+        
+        # 降级：发送文字消息
+        lines = [f"找到 {len(candidates)} 个候选："]
         for idx, item in enumerate(candidates, start=1):
             air_date = item.get("first_air_date") or ""
-            title = item.get("name") or item.get("original_name") or "\u672a\u77e5\u5267\u540d"
+            title = item.get("name") or item.get("original_name") or "未知剧名"
             tmdb_id = item.get("id")
             lines.append(f"{idx}. {title} {f'({air_date})' if air_date else ''} [TMDB:{tmdb_id}]")
-            if not first_poster_url and item.get("poster_path"):
-                first_poster_url = f"https://image.tmdb.org/t/p/w342{item['poster_path']}"
-
         lines.append("")
-        lines.append("\u56de\u590d\u201c\u8d44\u6e90 \u5e8f\u53f7\u201d\u67e5\u770b HDHive \u8d44\u6e90\uff0c\u4f8b\u5982\uff1a\u8d44\u6e90 1")
-        text_reply = "\n".join(lines)
-
-        # 尝试发送第一个结果的海报图片（异步，不影响文字回复）
-        if first_poster_url and wecom_client is not None:
-            try:
-                self._send_poster_async(wecom_client, user_id, first_poster_url)
-            except Exception as exc:
-                logger.warning(f"\u4f01\u4e1a\u5fae\u4fe1\u5f02\u6b65\u53d1\u9001\u6d77\u62a5\u5931\u8d25: {exc}")
-
-        return text_reply
+        lines.append("回复'资源 序号'查看 HDHive 资源，例如：资源 1")
+        return "\n".join(lines)
 
     def _send_poster_async(self, wecom_client: Any, user_id: str, poster_url: str) -> None:
         """在后台线程中上传海报并发送图片消息"""
@@ -173,7 +197,8 @@ class WeComCommandService:
             return f"\u67e5\u8be2\u8d44\u6e90\u5931\u8d25\uff1a{exc}"
 
         if not resources:
-            return f"\u6ca1\u6709\u627e\u5230\u201c{target.get('name', '\u672a\u77e5\u5267\u540d')}\u201d\u7684\u53ef\u7528\u8d44\u6e90\u3002"
+            default_name = '\u672a\u77e5\u5267\u540d'
+            return f"\u6ca1\u6709\u627e\u5230\u201c{target.get('name', default_name)}\u201d\u7684\u53ef\u7528\u8d44\u6e90\u3002"
 
         resource_results: List[Dict[str, Any]] = []
         for item in resources[:8]:
@@ -209,7 +234,8 @@ class WeComCommandService:
         if config_manager is not None:
             max_points = config_manager.get_hdhive_config().get("settings", {}).get("max_points_per_unlock", 0)
 
-        lines = [f"{target.get('name', '\u672a\u77e5\u5267\u540d')} \u7684\u8d44\u6e90\u5982\u4e0b\uff1a"]
+        default_name = '\u672a\u77e5\u5267\u540d'
+        lines = [f"{target.get('name', default_name)} \u7684\u8d44\u6e90\u5982\u4e0b\uff1a"]
         for idx, item in enumerate(resource_results, start=1):
             resolutions = "/".join(item.get("video_resolution") or []) or "-"
             sources = "/".join(item.get("source") or []) or "-"
@@ -222,9 +248,10 @@ class WeComCommandService:
             pan_name = self._pan_display_name(pan_type)
             pan_badge = f"[{pan_name}]" if pan_name else "[\u7f51\u76d8\u672a\u77e5]"
 
+            unknown_pan = '\u672a\u77e5'
             lines.append(
                 f"{idx}. {item['title']} {pan_badge}\n"
-                f"\u79ef\u5206:{points} \u7f51\u76d8:{pan_name or '\u672a\u77e5'} \u5206\u8fa8\u7387:{resolutions} \u6765\u6e90:{sources}{extra}"
+                f"\u79ef\u5206:{points} \u7f51\u76d8:{pan_name or unknown_pan} \u5206\u8fa8\u7387:{resolutions} \u6765\u6e90:{sources}{extra}"
             )
 
         lines.append("")
@@ -279,11 +306,12 @@ class WeComCommandService:
 
         status_text = "\u5df2\u62e5\u6709\u8be5\u8d44\u6e90" if result.get("already_owned") else "\u89e3\u9501\u6210\u529f"
         pan_type = (target.get("pan_type") or "").strip()
+        unknown_text = '\u672a\u77e5'
         lines = [
             status_text,
-            f"\u5267\u96c6: {target.get('series_name') or '\u672a\u77e5'}",
-            f"\u8d44\u6e90: {target.get('title') or '\u672a\u77e5'}",
-            f"\u7f51\u76d8: {self._pan_display_name(pan_type) or '\u672a\u77e5'}",
+            f"\u5267\u96c6: {target.get('series_name') or unknown_text}",
+            f"\u8d44\u6e90: {target.get('title') or unknown_text}",
+            f"\u7f51\u76d8: {self._pan_display_name(pan_type) or unknown_text}",
         ]
         if link:
             lines.append(f"\u94fe\u63a5: {link}")

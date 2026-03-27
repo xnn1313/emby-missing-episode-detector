@@ -104,36 +104,50 @@ class WeComCommandService:
             db=db,
         )
 
-        # 构建图文消息（企业微信 mpnews 必须有 thumb_media_id 才能显示图片）
-        # 先上传第一张海报获取 media_id
-        first_media_id = None
-        if candidates and candidates[0].get("poster_path") and wecom_client is not None:
-            try:
-                first_poster_url = f"https://image.tmdb.org/t/p/w342{candidates[0]['poster_path']}"
-                first_media_id = wecom_client.upload_media_image_url(first_poster_url)
-                if first_media_id:
-                    logger.info(f"企业微信海报上传成功：media_id={first_media_id}")
-            except Exception as exc:
-                logger.warning(f"企业微信上传海报失败：{exc}")
-        
-        # 如果有 media_id，发送图文消息
-        if first_media_id and wecom_client is not None:
+        # 并发上传所有候选的海报，每条用各自的 media_id
+        media_ids = [None] * len(candidates[:8])
+        if wecom_client is not None:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def _upload(idx_item):
+                idx, item = idx_item
+                poster_path = item.get("poster_path")
+                if not poster_path:
+                    return idx, None
+                try:
+                    url = f"https://image.tmdb.org/t/p/w342{poster_path}"
+                    mid = wecom_client.upload_media_image_url(url)
+                    return idx, mid
+                except Exception as exc:
+                    logger.warning(f"企业微信上传海报失败[{idx}]: {exc}")
+                    return idx, None
+
+            with ThreadPoolExecutor(max_workers=5) as pool:
+                futures = {pool.submit(_upload, (i, item)): i for i, item in enumerate(candidates[:8])}
+                for fut in as_completed(futures):
+                    idx, mid = fut.result()
+                    media_ids[idx] = mid
+
+        # 只要有至少一个成功的 media_id 就发图文，缺失的用第一个有效的补位
+        fallback_id = next((m for m in media_ids if m), None)
+        if fallback_id and wecom_client is not None:
             articles = []
             for idx, item in enumerate(candidates[:8], start=1):
                 air_date = item.get("first_air_date") or ""
                 title = item.get("name") or item.get("original_name") or "未知剧名"
                 tmdb_id = item.get("id")
-                
+                thumb = media_ids[idx - 1] or fallback_id
+
                 articles.append({
                     "title": f"{idx}. {title} ({air_date})",
-                    "thumb_media_id": first_media_id,
+                    "thumb_media_id": thumb,
                     "author": "Emby 缺集检测",
                     "content_source_url": "",
                     "content": f"TMDB ID: {tmdb_id}\\n\\n回复'资源 {idx}'查看 HDHive 资源",
                     "digest": f"TMDB:{tmdb_id} | 回复'资源 {idx}'查看详情",
                     "show_cover_pic": 1 if idx == 1 else 0,
                 })
-            
+
             try:
                 wecom_client.send_mpnews_message(user_id, articles)
                 return f"✅ 找到 {len(candidates)} 个候选，请查看图文消息\\n\\n回复'资源 序号'查看 HDHive 资源，例如：资源 1"

@@ -97,11 +97,16 @@ class ConfigManager:
                 "encoding_aes_key": "",
                 "base_url": "https://qyapi.weixin.qq.com/cgi-bin"
             },
-            "symedia": {
+            "wecom_search": {
                 "enabled": False,
-                "host": "",
-                "token": "symedia",
-                "parent_id": "0"
+                "corp_id": "",
+                "agent_id": 0,
+                "corp_secret": "",
+                "token": "",
+                "encoding_aes_key": "",
+                "base_url": "https://qyapi.weixin.qq.com/cgi-bin",
+                "pansou_url": "http://47.108.129.71:57081",
+                "pansou_token": ""
             }
         }
     
@@ -235,23 +240,6 @@ class ConfigManager:
             }
         })
 
-    def get_symedia_config(self) -> Dict:
-        return self.config.get("symedia", {
-            "enabled": False,
-            "host": "",
-            "token": "symedia",
-            "parent_id": "0"
-        })
-
-    def set_symedia_config(self, host: str, token: str = "symedia", parent_id: str = "0", enabled: bool = True) -> bool:
-        self.config["symedia"] = {
-            "enabled": bool(enabled),
-            "host": host or "",
-            "token": token or "symedia",
-            "parent_id": str(parent_id or "0")
-        }
-        return self._save_config(self.config)
-
     def get_wecom_config(self) -> Dict:
         """获取企业微信配置"""
         return self.config.get("wecom", {
@@ -314,6 +302,46 @@ class ConfigManager:
             "token": token,
             "encoding_aes_key": encoding_aes_key,
             "base_url": base_url
+        }
+        return self._save_config(self.config)
+
+    def get_wecom_search_config(self) -> Dict:
+        """获取企业微信资源搜索配置"""
+        return self.config.get("wecom_search", {
+            "enabled": False,
+            "corp_id": "",
+            "agent_id": 0,
+            "corp_secret": "",
+            "token": "",
+            "encoding_aes_key": "",
+            "base_url": "https://qyapi.weixin.qq.com/cgi-bin",
+            "pansou_url": "http://47.108.129.71:57081",
+            "pansou_token": ""
+        })
+
+    def set_wecom_search_config(
+        self,
+        enabled: bool = False,
+        corp_id: str = "",
+        agent_id: int = 0,
+        corp_secret: str = "",
+        token: str = "",
+        encoding_aes_key: str = "",
+        base_url: str = "https://qyapi.weixin.qq.com/cgi-bin",
+        pansou_url: str = "http://47.108.129.71:57081",
+        pansou_token: str = ""
+    ) -> bool:
+        """设置企业微信资源搜索配置"""
+        self.config["wecom_search"] = {
+            "enabled": enabled,
+            "corp_id": corp_id,
+            "agent_id": agent_id,
+            "corp_secret": corp_secret,
+            "token": token,
+            "encoding_aes_key": encoding_aes_key,
+            "base_url": base_url,
+            "pansou_url": pansou_url,
+            "pansou_token": pansou_token
         }
         return self._save_config(self.config)
     

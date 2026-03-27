@@ -4,6 +4,11 @@ function updateWeComCallbackUrl() {
     const callbackInput = document.getElementById('wecomCallbackUrl');
     if (!callbackInput) return;
     callbackInput.value = `${window.location.origin}/api/wecom/callback`;
+
+    const searchCallbackInput = document.getElementById('wecomSearchCallbackUrl');
+    if (searchCallbackInput) {
+        searchCallbackInput.value = `${window.location.origin}/api/wecom/search/callback`;
+    }
 }
 
 function showConfigStatus(elId, type, html) {
@@ -64,6 +69,19 @@ async function loadConfig() {
             document.getElementById('wecomToken').value = wc.token || '';
             document.getElementById('wecomEncodingAesKey').value = wc.encoding_aes_key || '';
             document.getElementById('wecomBaseUrl').value = wc.base_url || 'https://qyapi.weixin.qq.com/cgi-bin';
+        }
+
+        const wecomSearchRes = await authFetch('/api/wecom/search/config');
+        const wecomSearchData = await wecomSearchRes.json();
+        if (wecomSearchData.status === 'success') {
+            const ws = wecomSearchData.config;
+            document.getElementById('wecomSearchEnabled').checked = ws.enabled || false;
+            document.getElementById('wecomSearchCorpId').value = ws.corp_id || '';
+            document.getElementById('wecomSearchAgentId').value = ws.agent_id || '';
+            document.getElementById('wecomSearchCorpSecret').value = ws.corp_secret || '';
+            document.getElementById('wecomSearchToken').value = ws.token || '';
+            document.getElementById('wecomSearchEncodingAesKey').value = ws.encoding_aes_key || '';
+            document.getElementById('wecomSearchPansouUrl').value = ws.pansou_url || 'http://47.108.129.71:57081';
         }
 
         const symRes = await authFetch('/api/symedia/config');
@@ -174,6 +192,21 @@ window.saveConfig = async function(e) {
         });
         const wecomData = await wecomResp.json();
 
+        const wecomSearchConfig = {
+            enabled: document.getElementById('wecomSearchEnabled').checked,
+            corp_id: document.getElementById('wecomSearchCorpId').value.trim(),
+            agent_id: parseInt(document.getElementById('wecomSearchAgentId').value) || 0,
+            corp_secret: document.getElementById('wecomSearchCorpSecret').value.trim(),
+            token: document.getElementById('wecomSearchToken').value.trim(),
+            encoding_aes_key: document.getElementById('wecomSearchEncodingAesKey').value.trim(),
+            pansou_url: document.getElementById('wecomSearchPansouUrl').value.trim() || 'http://47.108.129.71:57081',
+        };
+        await authFetch('/api/wecom/search/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(wecomSearchConfig)
+        });
+
         const symediaConfig = {
             enabled: document.getElementById('symediaEnabled').checked,
             host: document.getElementById('symediaHost').value.trim(),
@@ -224,7 +257,7 @@ window.saveConfig = async function(e) {
 }
 
 window.showConfigTab = function(name) {
-    const tabs = ['emby', 'mp', 'hdhive', 'wecom', 'symedia', 'global'];
+    const tabs = ['emby', 'mp', 'hdhive', 'wecom', 'wecom-search', 'symedia', 'global'];
     tabs.forEach(t => {
         const sec = document.getElementById('cfgSection-' + t);
         const btn = document.getElementById('cfgTab-' + t);
@@ -276,5 +309,29 @@ window.testWeComConnection = async function() {
         }
     } catch (error) {
         showConfigStatus('wecomStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> 连接失败: ${error.message}</p>`);
+    }
+}
+
+window.testWeComSearchConnection = async function() {
+    showConfigStatus('wecomSearchStatus', 'loading', '<i class="fas fa-spinner fa-spin"></i> 测试连接中...');
+
+    try {
+        const response = await authFetch('/api/wecom/search/status');
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            const callbackReady = data.callback_ready ? '已配置' : '未配置';
+            const sendReady = data.send_ready ? '已配置' : '未配置';
+            showConfigStatus('wecomSearchStatus', 'success', `
+                <p style="color: #4ade80;"><i class="fas fa-check-circle"></i> ${data.message || '连接正常'}</p>
+                <p>回调验签: ${callbackReady}</p>
+                <p>主动发送: ${sendReady}</p>
+                <p>回调地址: ${document.getElementById('wecomSearchCallbackUrl').value}</p>
+            `);
+        } else {
+            showConfigStatus('wecomSearchStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> ${data.message || '连接失败'}</p>`);
+        }
+    } catch (error) {
+        showConfigStatus('wecomSearchStatus', 'error', `<p style="color: #f87171;"><i class="fas fa-times-circle"></i> 连接失败: ${error.message}</p>`);
     }
 }

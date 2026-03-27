@@ -32,6 +32,7 @@ from app.export import ReportExporter
 from app.config_manager import get_config_manager, ConfigManager
 from app.auth import AUTH_AVAILABLE, create_access_token, get_user_database, verify_access_token
 from app.wecom_command_service import WeComCommandService
+from app.wecom_search_service import WeComSearchService
 
 MASKED_SECRET = "***"
 auth_scheme = HTTPBearer(auto_error=False)
@@ -90,6 +91,8 @@ moviepilot_client: Optional[Any] = None
 hdhive_client: Optional[Any] = None
 wecom_client: Optional[Any] = None
 wecom_command_service = WeComCommandService()
+wecom_search_client: Optional[Any] = None
+wecom_search_service = WeComSearchService()
 last_result = None
 
 
@@ -219,7 +222,8 @@ def _build_public_config(config: Dict[str, Any]) -> Dict[str, Any]:
         "tmdb": dict(config.get("tmdb", {})),
         "detection": dict(config.get("detection", {})),
         "moviepilot": dict(config.get("moviepilot", {})),
-        "wecom": dict(config.get("wecom", {}))
+        "wecom": dict(config.get("wecom", {})),
+        "wecom_search": dict(config.get("wecom_search", {}))
     }
 
     public_config["emby"]["api_key"] = _mask_secret(public_config["emby"].get("api_key", ""))
@@ -228,6 +232,9 @@ def _build_public_config(config: Dict[str, Any]) -> Dict[str, Any]:
     public_config["wecom"]["corp_secret"] = _mask_secret(public_config["wecom"].get("corp_secret", ""))
     public_config["wecom"]["token"] = _mask_secret(public_config["wecom"].get("token", ""))
     public_config["wecom"]["encoding_aes_key"] = _mask_secret(public_config["wecom"].get("encoding_aes_key", ""))
+    public_config["wecom_search"]["corp_secret"] = _mask_secret(public_config["wecom_search"].get("corp_secret", ""))
+    public_config["wecom_search"]["token"] = _mask_secret(public_config["wecom_search"].get("token", ""))
+    public_config["wecom_search"]["encoding_aes_key"] = _mask_secret(public_config["wecom_search"].get("encoding_aes_key", ""))
 
     return public_config
 
@@ -240,6 +247,7 @@ def _build_persisted_config(config: FullConfig, existing: Dict[str, Any]) -> Dic
     libraries_existing = existing.get("libraries", {})
     hdhive_existing = existing.get("hdhive", {})
     wecom_existing = existing.get("wecom", {})
+    wecom_search_existing = existing.get("wecom_search", {})
 
     emby_config = {
         "host": (config.emby.host or "").strip(),
@@ -302,13 +310,14 @@ def _build_persisted_config(config: FullConfig, existing: Dict[str, Any]) -> Dic
         "detection": detection_config,
         "moviepilot": moviepilot_config,
         "hdhive": dict(hdhive_existing),
-        "wecom": wecom_config
+        "wecom": wecom_config,
+        "wecom_search": dict(wecom_search_existing)
     }
 
 
 def _cleanup_runtime_components():
     global emby_client, tmdb_client, tmdb_matcher, detector, notifier_manager, db
-    global exporter, detection_scheduler, moviepilot_client, hdhive_client, wecom_client
+    global exporter, detection_scheduler, moviepilot_client, hdhive_client, wecom_client, wecom_search_client
 
     if detection_scheduler is not None:
         try:
@@ -317,7 +326,7 @@ def _cleanup_runtime_components():
             logger.warning(f"关闭旧调度器失败：{exc}")
         detection_scheduler = None
 
-    for client_name in ("emby_client", "moviepilot_client", "hdhive_client", "tmdb_client", "wecom_client"):
+    for client_name in ("emby_client", "moviepilot_client", "hdhive_client", "tmdb_client", "wecom_client", "wecom_search_client"):
         client = globals().get(client_name)
         if client is not None and hasattr(client, "close"):
             try:
@@ -352,7 +361,7 @@ def _build_proxy_url(proxy_config: Optional[Dict[str, Any]]) -> str:
 
 def _apply_runtime_config(config: Dict[str, Any]):
     global emby_client, tmdb_client, tmdb_matcher, detector, notifier_manager, db
-    global exporter, detection_scheduler, moviepilot_client, hdhive_client, wecom_client
+    global exporter, detection_scheduler, moviepilot_client, hdhive_client, wecom_client, wecom_search_client
 
     _cleanup_runtime_components()
 
@@ -406,6 +415,16 @@ def _apply_runtime_config(config: Dict[str, Any]):
         except Exception as exc:
             wecom_client = None
             logger.error(f"企业微信客户端初始化失败: {exc}")
+
+    wecom_search_config = config.get("wecom_search", {})
+    if wecom_search_config.get("enabled"):
+        from app.wecom_client import create_client_from_config as create_wecom_client
+        try:
+            wecom_search_client = create_wecom_client(wecom_search_config)
+            logger.info("企业微信搜索客户端已初始化")
+        except Exception as exc:
+            wecom_search_client = None
+            logger.error(f"企业微信搜索客户端初始化失败: {exc}")
 
     interval = detection_config.get("interval_minutes", 60)
     auto_start = detection_config.get("auto_start", True)
@@ -1848,6 +1867,232 @@ async def receive_wecom_callback(
             except Exception as db_exc:
                 logger.warning(f"记录企业微信消息失败状态时出错: {db_exc}")
         logger.error(f"企业微信回调处理失败: {exc}")
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+
+# ============ 企业微信资源搜索 API ============
+
+@app.get("/api/wecom/search/config")
+async def get_wecom_search_config(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取企业微信资源搜索配置"""
+    global config_manager
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    config = config_manager.get_wecom_search_config()
+    safe_config = {
+        "enabled": config.get("enabled", False),
+        "corp_id": config.get("corp_id", ""),
+        "agent_id": config.get("agent_id", 0),
+        "corp_secret": _mask_secret(config.get("corp_secret", "")),
+        "token": _mask_secret(config.get("token", "")),
+        "encoding_aes_key": _mask_secret(config.get("encoding_aes_key", "")),
+        "base_url": config.get("base_url", "https://qyapi.weixin.qq.com/cgi-bin"),
+        "pansou_url": config.get("pansou_url", "http://47.108.129.71:57081"),
+        "pansou_token": _mask_secret(config.get("pansou_token", "")),
+    }
+    return {"status": "success", "config": safe_config}
+
+
+@app.post("/api/wecom/search/config")
+async def set_wecom_search_config(config: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    """设置企业微信资源搜索配置"""
+    global config_manager
+
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    existing = config_manager.get_wecom_search_config()
+
+    corp_secret = _resolve_secret(config.get("corp_secret", ""), existing.get("corp_secret", ""))
+    token = _resolve_secret(config.get("token", ""), existing.get("token", ""))
+    encoding_aes_key = _resolve_secret(config.get("encoding_aes_key", ""), existing.get("encoding_aes_key", ""))
+    pansou_token = _resolve_secret(config.get("pansou_token", ""), existing.get("pansou_token", ""))
+
+    success = config_manager.set_wecom_search_config(
+        enabled=config.get("enabled", False),
+        corp_id=config.get("corp_id", ""),
+        agent_id=int(config.get("agent_id", 0) or 0),
+        corp_secret=corp_secret,
+        token=token,
+        encoding_aes_key=encoding_aes_key,
+        base_url=config.get("base_url", "https://qyapi.weixin.qq.com/cgi-bin"),
+        pansou_url=config.get("pansou_url", "http://47.108.129.71:57081"),
+        pansou_token=pansou_token,
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="配置保存失败")
+
+    full_config = config_manager.get_all_config()
+    _apply_runtime_config(full_config)
+
+    test_result = None
+    if full_config.get("wecom_search", {}).get("enabled") and wecom_search_client is not None:
+        try:
+            if wecom_search_client.can_send():
+                wecom_search_client.get_access_token()
+                test_result = "AccessToken 获取成功"
+            elif wecom_search_client.can_callback():
+                test_result = "回调模式配置成功"
+            else:
+                test_result = "已保存，但主动发送和回调参数都不完整"
+        except Exception as exc:
+            test_result = f"连接失败: {exc}"
+
+    return {"status": "success", "message": "企业微信搜索配置保存成功", "test_result": test_result}
+
+
+@app.get("/api/wecom/search/status")
+async def get_wecom_search_status(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取企业微信资源搜索状态"""
+    if wecom_search_client is None:
+        return {"status": "not_configured", "message": "企业微信搜索未配置"}
+
+    try:
+        result = {
+            "status": "success",
+            "callback_ready": wecom_search_client.can_callback(),
+            "send_ready": wecom_search_client.can_send(),
+        }
+        if wecom_search_client.can_send():
+            wecom_search_client.get_access_token()
+            result["message"] = "企业微信搜索连接正常"
+        else:
+            result["message"] = "企业微信搜索回调模式已启用"
+        return result
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@app.get("/api/wecom/search/callback")
+async def verify_wecom_search_callback(
+    msg_signature: str,
+    timestamp: str,
+    nonce: str,
+    echostr: str,
+):
+    """企业微信搜索回调 URL 验证"""
+    if wecom_search_client is None:
+        raise HTTPException(status_code=400, detail="企业微信搜索未配置")
+
+    try:
+        echo = wecom_search_client.verify_callback_url(msg_signature, timestamp, nonce, echostr)
+        logger.info("企业微信搜索 URL 验证成功")
+        return Response(content=echo, media_type="text/plain")
+    except Exception as exc:
+        logger.error(f"企业微信搜索 URL 验证失败: {exc}")
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+def _process_wecom_search_async(
+    message: Dict[str, Any],
+    current_wecom_search_client: Any,
+    current_config_manager: Any,
+):
+    """后台处理企业微信搜索消息并主动发送结果"""
+    from app.pansou_client import PanSouClient
+
+    from_user = message.get("FromUserName", "")
+    msg_type = (message.get("MsgType") or "").lower()
+
+    try:
+        cfg = current_config_manager.get_wecom_search_config() if current_config_manager else {}
+        pansou_url = cfg.get("pansou_url", "http://47.108.129.71:57081")
+        pansou_token = cfg.get("pansou_token") or None
+        pansou_client = PanSouClient(base_url=pansou_url, token=pansou_token)
+
+        try:
+            if msg_type == "text":
+                reply_text = wecom_search_service.handle_text_message(
+                    user_id=from_user,
+                    content=message.get("Content", ""),
+                    pansou_client=pansou_client,
+                    wecom_client=current_wecom_search_client,
+                )
+            elif msg_type == "event":
+                reply_text = "欢迎使用网盘资源搜索！\n发送关键词即可搜索，例如：遮天"
+            else:
+                reply_text = "当前只支持文本消息，请发送关键词搜索资源。"
+        finally:
+            pansou_client.close()
+
+        current_wecom_search_client.send_text_message(from_user, reply_text)
+        logger.info(
+            "企业微信搜索异步回复发送成功: msg_type={}, from_user={}",
+            msg_type or "unknown",
+            from_user or "unknown",
+        )
+    except Exception as exc:
+        logger.error(f"企业微信搜索异步处理失败: {exc}")
+
+
+@app.post("/api/wecom/search/callback")
+async def receive_wecom_search_callback(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    msg_signature: Optional[str] = None,
+    timestamp: Optional[str] = None,
+    nonce: Optional[str] = None,
+):
+    """接收企业微信搜索消息并处理"""
+    global config_manager
+    if wecom_search_client is None:
+        raise HTTPException(status_code=400, detail="企业微信搜索未配置")
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    body = (await request.body()).decode("utf-8")
+    logger.info("收到企业微信搜索回调: body_length={}", len(body))
+
+    try:
+        message = wecom_search_client.parse_callback_message(
+            body, msg_signature, timestamp, nonce, require_encrypted=True,
+        )
+        from_user = message.get("FromUserName", "")
+        to_user = message.get("ToUserName", "")
+
+        if wecom_search_client.can_send():
+            background_tasks.add_task(
+                _process_wecom_search_async,
+                message,
+                wecom_search_client,
+                config_manager,
+            )
+            return Response(content="success", media_type="text/plain")
+
+        # 降级：同步处理（无主动发送能力时）
+        from app.pansou_client import PanSouClient
+        cfg = config_manager.get_wecom_search_config()
+        pansou_client = PanSouClient(
+            base_url=cfg.get("pansou_url", "http://47.108.129.71:57081"),
+            token=cfg.get("pansou_token") or None,
+        )
+        try:
+            msg_type = (message.get("MsgType") or "").lower()
+            if msg_type == "text":
+                reply_text = wecom_search_service.handle_text_message(
+                    user_id=from_user,
+                    content=message.get("Content", ""),
+                    pansou_client=pansou_client,
+                )
+            else:
+                reply_text = "请发送关键词搜索资源。"
+        finally:
+            pansou_client.close()
+
+        reply_xml = wecom_search_client.build_text_reply(
+            to_user=from_user,
+            from_user=to_user,
+            content=reply_text,
+            timestamp=timestamp,
+            nonce=nonce,
+        )
+        return Response(content=reply_xml, media_type="application/xml")
+
+    except Exception as exc:
+        logger.error(f"企业微信搜索回调处理失败: {exc}")
         raise HTTPException(status_code=400, detail=str(exc))
 
 

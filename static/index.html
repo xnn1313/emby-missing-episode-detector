@@ -225,6 +225,7 @@
                     <button class="cfg-tab" id="cfgTab-mp" onclick="showConfigTab('mp')"><i class="fas fa-download"></i> MoviePilot</button>
                     <button class="cfg-tab" id="cfgTab-hdhive" onclick="showConfigTab('hdhive')"><i class="fas fa-hive"></i> HDHive</button>
                     <button class="cfg-tab" id="cfgTab-wecom" onclick="showConfigTab('wecom')"><i class="fas fa-building"></i> 企业微信</button>
+                    <button class="cfg-tab" id="cfgTab-wecom-search" onclick="showConfigTab('wecom-search')"><i class="fas fa-search"></i> 资源搜索</button>
                     <button class="cfg-tab" id="cfgTab-symedia" onclick="showConfigTab('symedia')"><i class="fas fa-cloud"></i> Symedia</button>
                     <button class="cfg-tab" id="cfgTab-global" onclick="showConfigTab('global')"><i class="fas fa-globe"></i> 全局</button>
                     <div style="margin-left:auto;">
@@ -376,6 +377,54 @@
                             <button type="button" class="btn btn-outline" onclick="testWeComConnection()" style="flex: 1;">
                                 <i class="fas fa-comment-dots"></i>
                                 测试企业微信
+                            </button>
+                        </div>
+                    </div>
+                    <div class="config-section" id="cfgSection-wecom-search">
+                        <div class="cfg-section-title">企业微信资源搜索 设置</div>
+                        <div class="cfg-divider"></div>
+                        <div class="cfg-columns">
+                            <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="wecomSearchEnabled" style="width: auto;">
+                                启用企业微信资源搜索
+                            </label>
+                            </div>
+                            <div class="form-group">
+                            <label>企业 ID CorpID</label>
+                            <input type="text" id="wecomSearchCorpId" class="filter-select" style="width: 100%;" placeholder="wwxxxxxxxxxxxxxxxx">
+                            </div>
+                            <div class="form-group">
+                            <label>应用 AgentId</label>
+                            <input type="number" id="wecomSearchAgentId" class="filter-select" style="width: 100%;" placeholder="1000003">
+                            </div>
+                            <div class="form-group">
+                            <label>应用 Secret</label>
+                            <input type="password" id="wecomSearchCorpSecret" class="filter-select" style="width: 100%;" placeholder="用于获取 AccessToken">
+                            </div>
+                            <div class="form-group">
+                            <label>回调 Token</label>
+                            <input type="password" id="wecomSearchToken" class="filter-select" style="width: 100%;" placeholder="企业微信回调配置中的 Token">
+                            </div>
+                            <div class="form-group">
+                            <label>回调 EncodingAESKey</label>
+                            <input type="password" id="wecomSearchEncodingAesKey" class="filter-select" style="width: 100%;" placeholder="43 位 EncodingAESKey">
+                            </div>
+                            <div class="form-group">
+                            <label>PanSou 服务地址</label>
+                            <input type="text" id="wecomSearchPansouUrl" class="filter-select" style="width: 100%;" placeholder="http://47.108.129.71:57081">
+                            <div class="cfg-help">只填域名+端口，例如 http://IP:57081</div>
+                            </div>
+                            <div class="form-group">
+                            <label>回调地址</label>
+                            <input type="text" id="wecomSearchCallbackUrl" class="filter-select" style="width: 100%;" readonly>
+                            </div>
+                        </div>
+                        <div id="wecomSearchStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button type="button" class="btn btn-outline" onclick="testWeComSearchConnection()" style="flex: 1;">
+                                <i class="fas fa-plug"></i>
+                                测试连接
                             </button>
                         </div>
                     </div>

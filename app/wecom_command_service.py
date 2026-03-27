@@ -229,6 +229,7 @@ class WeComCommandService:
                     "video_resolution": item.get("video_resolution", []),
                     "source": item.get("source", []),
                     "pan_type": normalized_pan_type,
+                    "share_size": item.get("share_size") or "",
                     "tmdb_id": str(target.get("id")),
                     "series_name": target.get("name") or target.get("original_name") or "",
                 }
@@ -248,28 +249,33 @@ class WeComCommandService:
         if config_manager is not None:
             max_points = config_manager.get_hdhive_config().get("settings", {}).get("max_points_per_unlock", 0)
 
-        default_name = '\u672a\u77e5\u5267\u540d'
-        lines = [f"{target.get('name', default_name)} \u7684\u8d44\u6e90\u5982\u4e0b\uff1a"]
+        series_name = target.get('name') or target.get('original_name') or '未知剧名'
+        lines = [f"🎬 {series_name} 的资源列表", ""]
         for idx, item in enumerate(resource_results, start=1):
             resolutions = "/".join(item.get("video_resolution") or []) or "-"
             sources = "/".join(item.get("source") or []) or "-"
             points = item.get("unlock_points", 0)
-            extra = " \u5df2\u89e3\u9501" if item.get("is_unlocked") else ""
-            if max_points and points > max_points:
-                extra += " \u8d85\u8fc7\u79ef\u5206\u4e0a\u9650"
+            share_size = item.get("share_size") or ""
+            is_unlocked = item.get("is_unlocked", False)
+            over_limit = max_points and points > max_points
 
             pan_type = (item.get("pan_type") or "").strip()
-            pan_name = self._pan_display_name(pan_type)
-            pan_badge = f"[{pan_name}]" if pan_name else "[\u7f51\u76d8\u672a\u77e5]"
+            pan_name = self._pan_display_name(pan_type) or "未知"
 
-            unknown_pan = '\u672a\u77e5'
-            lines.append(
-                f"{idx}. {item['title']} {pan_badge}\n"
-                f"\u79ef\u5206:{points} \u7f51\u76d8:{pan_name or unknown_pan} \u5206\u8fa8\u7387:{resolutions} \u6765\u6e90:{sources}{extra}"
-            )
+            lines.append("━" * 16)
+            lines.append(f"{idx}. {item['title']}")
+            lines.append(f"📦 {pan_name}  🏞 {resolutions}  📡 {sources}")
+            size_part = f"💾 {share_size}  " if share_size else ""
+            points_icon = "⛔" if over_limit else "🪙"
+            lines.append(f"{size_part}{points_icon} {points} 积分")
+            if is_unlocked:
+                lines.append("✅ 已解锁")
+            if over_limit:
+                lines.append("⚠️ 超过积分上限")
 
+        lines.append("━" * 16)
         lines.append("")
-        lines.append("\u56de\u590d\u201c\u89e3\u9501 \u5e8f\u53f7\u201d\u83b7\u53d6\u94fe\u63a5\uff0c\u4f8b\u5982\uff1a\u89e3\u9501 1")
+        lines.append("回复「解锁 序号」获取链接，例如：解锁 1")
         return "\n".join(lines)
 
     def _unlock_resource(self, user_id: str, index: int, hdhive_client: Any, db: Any, config_manager: Any) -> str:

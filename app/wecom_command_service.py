@@ -126,7 +126,7 @@ class WeComCommandService:
                 
                 articles.append({
                     "title": f"{idx}. {title} ({air_date})",
-                    "thumb_media_id": first_media_id if idx == 1 else "",
+                    "thumb_media_id": first_media_id,
                     "author": "Emby 缺集检测",
                     "content_source_url": "",
                     "content": f"TMDB ID: {tmdb_id}\\n\\n回复'资源 {idx}'查看 HDHive 资源",

@@ -345,6 +345,26 @@ class ConfigManager:
         }
         return self._save_config(self.config)
     
+    def get_symedia_config(self) -> Dict:
+        """获取 Symedia 转存配置"""
+        return self.config.get("symedia", {
+            "enabled": False,
+            "host": "",
+            "token": "symedia",
+            "parent_id": "0"
+        })
+
+    def set_symedia_config(self, enabled: bool = False, host: str = "",
+                           token: str = "symedia", parent_id: str = "0") -> bool:
+        """设置 Symedia 转存配置"""
+        self.config["symedia"] = {
+            "enabled": enabled,
+            "host": host,
+            "token": token,
+            "parent_id": parent_id
+        }
+        return self._save_config(self.config)
+
     def get_all_config(self) -> Dict:
         """获取完整配置"""
         return deepcopy(self.config)

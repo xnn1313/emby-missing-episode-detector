@@ -2096,6 +2096,39 @@ async def receive_wecom_search_callback(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+# ============ Symedia 转存 API ============
+
+@app.get("/api/symedia/config")
+async def get_symedia_config(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """获取 Symedia 转存配置"""
+    global config_manager
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    config = config_manager.get_symedia_config()
+    return {"status": "success", "config": config}
+
+
+@app.post("/api/symedia/config")
+async def set_symedia_config(config: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)):
+    """设置 Symedia 转存配置"""
+    global config_manager
+    if config_manager is None:
+        config_manager = get_config_manager()
+
+    success = config_manager.set_symedia_config(
+        enabled=config.get("enabled", False),
+        host=(config.get("host") or "").strip(),
+        token=(config.get("token") or "symedia").strip() or "symedia",
+        parent_id=(config.get("parent_id") or "0").strip() or "0",
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="配置保存失败")
+
+    return {"status": "success", "message": "Symedia 配置保存成功"}
+
+
 # ============ 静态文件 ============
 
 # 挂载静态文件目录
